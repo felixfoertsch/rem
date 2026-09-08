@@ -1,0 +1,829 @@
+//go:build darwin && integration
+
+// Package main provides an integration test script for the reminders package.
+// It exercises the real EventKit bridge against live macOS Reminders data.
+//
+// Run with: go run -tags integration ./scripts/integration_reminders.go
+package main
+
+import (
+	"fmt"
+	"log"
+	"os"
+	"time"
+
+	"github.com/BRO3886/go-eventkit"
+	"github.com/BRO3886/go-eventkit/reminders"
+)
+
+func main() {
+	log.SetFlags(0)
+	log.SetPrefix("[reminders-integration] ")
+
+	passed := 0
+	failed := 0
+
+	check := func(name string, err error) {
+		if err != nil {
+			log.Printf("FAIL: %s: %v", name, err)
+			failed++
+		} else {
+			log.Printf("PASS: %s", name)
+			passed++
+		}
+	}
+
+	// --- Test 1: Create client (TCC access) ---
+	client, err := reminders.New()
+	if err != nil {
+		log.Fatalf("FATAL: Failed to create client (TCC denied?): %v", err)
+	}
+	log.Println("PASS: Client created successfully")
+	passed++
+
+	// --- Test 2: List all reminder lists ---
+	lists, err := client.Lists()
+	check("List all reminder lists", err)
+	if err == nil {
+		log.Printf("  Found %d lists:", len(lists))
+		for _, l := range lists {
+			log.Printf("    - %s (ID: %s, Source: %s, Count: %d, ReadOnly: %v)",
+				l.Title, truncateID(l.ID), l.Source, l.Count, l.ReadOnly)
+		}
+	}
+
+	// --- Test 3: Get all reminders (no filter) ---
+	allReminders, err := client.Reminders()
+	check("Fetch all reminders (no filter)", err)
+	if err == nil {
+		log.Printf("  Found %d total reminders", len(allReminders))
+	}
+
+	// --- Test 4: Get incomplete reminders only ---
+	incompleteReminders, err := client.Reminders(reminders.WithCompleted(false))
+	check("Fetch incomplete reminders only", err)
+	if err == nil {
+		log.Printf("  Found %d incomplete reminders", len(incompleteReminders))
+		for _, r := range incompleteReminders {
+			if r.Completed {
+				log.Printf("  FAIL: Reminder %q is completed but filter was incomplete-only", r.Title)
+				failed++
+				break
+			}
+		}
+	}
+
+	// --- Test 5: Get completed reminders only ---
+	completedReminders, err := client.Reminders(reminders.WithCompleted(true))
+	check("Fetch completed reminders only", err)
+	if err == nil {
+		log.Printf("  Found %d completed reminders", len(completedReminders))
+		for _, r := range completedReminders {
+			if !r.Completed {
+				log.Printf("  FAIL: Reminder %q is not completed but filter was completed-only", r.Title)
+				failed++
+				break
+			}
+		}
+	}
+
+	// --- Determine default list name ---
+	defaultList := "Reminders"
+	if len(lists) > 0 {
+		defaultList = lists[0].Title
+	}
+	log.Printf("  Using default list: %q", defaultList)
+
+	// --- Test 6: Create a reminder ---
+	dueDate := time.Now().Add(48 * time.Hour)
+	created, err := client.CreateReminder(reminders.CreateReminderInput{
+		Title:    "[go-eventkit test] Integration Test Reminder",
+		Notes:    "Created by go-eventkit integration test. Safe to delete.",
+		ListName: defaultList,
+		DueDate:  &dueDate,
+		Priority: reminders.PriorityMedium,
+	})
+	check("Create reminder in "+defaultList+" list", err)
+
+	var createdID string
+	if err == nil {
+		createdID = created.ID
+		log.Printf("  Created reminder: %q (ID: %s)", created.Title, truncateID(created.ID))
+		log.Printf("  List: %s, Priority: %s, Completed: %v", created.List, created.Priority, created.Completed)
+		if created.DueDate != nil {
+			log.Printf("  DueDate: %v", created.DueDate.Format(time.RFC3339))
+		}
+	}
+
+	// --- Test 7: Get reminder by ID ---
+	if createdID != "" {
+		fetched, err := client.Reminder(createdID)
+		check("Get reminder by ID", err)
+		if err == nil {
+			if fetched.Title != created.Title {
+				log.Printf("  WARN: Title mismatch: got %q, want %q", fetched.Title, created.Title)
+			}
+			log.Printf("  Fetched reminder matches: %q", fetched.Title)
+		}
+	}
+
+	// --- Test 8: Get reminder by ID prefix ---
+	if createdID != "" && len(createdID) > 8 {
+		prefix := createdID[:8]
+		fetched, err := client.Reminder(prefix)
+		check("Get reminder by ID prefix", err)
+		if err == nil {
+			if fetched.ID != createdID {
+				log.Printf("  WARN: ID mismatch: got %q, want %q", fetched.ID, createdID)
+			}
+			log.Printf("  Found reminder by prefix %q: %q", prefix, fetched.Title)
+		}
+	}
+
+	// --- Test 9: Search reminders ---
+	searchResults, err := client.Reminders(reminders.WithSearch("Integration Test"))
+	check("Search reminders for 'Integration Test'", err)
+	if err == nil {
+		log.Printf("  Found %d reminders matching search", len(searchResults))
+		found := false
+		for _, r := range searchResults {
+			if r.ID == createdID {
+				found = true
+			}
+		}
+		if createdID != "" && !found {
+			log.Printf("  WARN: Created reminder not found in search results")
+		}
+	}
+
+	// --- Test 10: Filter by list name ---
+	if len(lists) > 0 {
+		listName := lists[0].Title
+		listReminders, err := client.Reminders(reminders.WithList(listName))
+		check(fmt.Sprintf("Filter reminders by list (%s)", listName), err)
+		if err == nil {
+			log.Printf("  Found %d reminders in %q", len(listReminders), listName)
+			for _, r := range listReminders {
+				if r.List != listName {
+					log.Printf("  FAIL: Reminder %q is in list %q, expected %q", r.Title, r.List, listName)
+					failed++
+					break
+				}
+			}
+		}
+	}
+
+	// --- Test 11: Update reminder ---
+	if createdID != "" {
+		newTitle := "[go-eventkit test] Updated Reminder"
+		newNotes := "Updated by integration test"
+		newPriority := reminders.PriorityHigh
+
+		updated, err := client.UpdateReminder(createdID, reminders.UpdateReminderInput{
+			Title:    &newTitle,
+			Notes:    &newNotes,
+			Priority: &newPriority,
+		})
+		check("Update reminder", err)
+		if err == nil {
+			if updated.Title != newTitle {
+				log.Printf("  FAIL: Title not updated: got %q, want %q", updated.Title, newTitle)
+				failed++
+			} else {
+				log.Printf("  Updated reminder title to: %q", updated.Title)
+			}
+			log.Printf("  Updated priority: %s", updated.Priority)
+		}
+	}
+
+	// --- Test 12: Complete reminder ---
+	if createdID != "" {
+		completed, err := client.CompleteReminder(createdID)
+		check("Complete reminder", err)
+		if err == nil {
+			if !completed.Completed {
+				log.Printf("  FAIL: Reminder not marked as completed")
+				failed++
+			} else {
+				log.Printf("  Reminder completed: %v, CompletionDate: %v", completed.Completed, completed.CompletionDate)
+			}
+		}
+	}
+
+	// --- Test 13: Uncomplete reminder ---
+	if createdID != "" {
+		uncompleted, err := client.UncompleteReminder(createdID)
+		check("Uncomplete reminder", err)
+		if err == nil {
+			if uncompleted.Completed {
+				log.Printf("  FAIL: Reminder still marked as completed")
+				failed++
+			} else {
+				log.Printf("  Reminder uncompleted: %v", uncompleted.Completed)
+			}
+		}
+	}
+
+	// --- Test 14: Create reminder with alarm ---
+	alarmDate := time.Now().Add(72 * time.Hour)
+	alarmReminder, err := client.CreateReminder(reminders.CreateReminderInput{
+		Title:    "[go-eventkit test] Alarm Reminder",
+		ListName: defaultList,
+		Notes:    "Created by go-eventkit integration test. Safe to delete.",
+		Alarms: []reminders.Alarm{
+			{AbsoluteDate: &alarmDate},
+		},
+	})
+	check("Create reminder with alarm", err)
+
+	var alarmReminderID string
+	if err == nil {
+		alarmReminderID = alarmReminder.ID
+		log.Printf("  Created alarm reminder: %q, HasAlarms=%v, Alarms=%d",
+			alarmReminder.Title, alarmReminder.HasAlarms, len(alarmReminder.Alarms))
+	}
+
+	// --- Test 15: Create reminder with URL (verifies REMURLAttachment round-trip) ---
+	urlReminder, err := client.CreateReminder(reminders.CreateReminderInput{
+		Title:    "[go-eventkit test] URL Reminder",
+		ListName: defaultList,
+		URL:      "https://example.com/test",
+		Notes:    "Created by go-eventkit integration test. Safe to delete.",
+	})
+	check("Create reminder with URL", err)
+
+	var urlReminderID string
+	if err == nil {
+		urlReminderID = urlReminder.ID
+		log.Printf("  Created URL reminder: %q, URL=%s", urlReminder.Title, urlReminder.URL)
+		if urlReminder.URL != "https://example.com/test" {
+			log.Printf("FAIL: URL round-trip mismatch: got %q, want %q", urlReminder.URL, "https://example.com/test")
+			failed++
+		} else {
+			// Fetch fresh to confirm the URL survived persistence (not just cached in the in-memory object).
+			refetched, rerr := client.Reminder(urlReminderID)
+			if rerr != nil {
+				log.Printf("FAIL: could not refetch URL reminder: %v", rerr)
+				failed++
+			} else if refetched.URL != "https://example.com/test" {
+				log.Printf("FAIL: URL did not persist: got %q, want %q", refetched.URL, "https://example.com/test")
+				failed++
+			} else {
+				log.Printf("PASS: URL persisted correctly on fresh fetch")
+				passed++
+			}
+		}
+
+		// Update the URL to a new value and verify it replaces cleanly.
+		newURL := "https://github.com/BRO3886/rem"
+		_, uerr := client.UpdateReminder(urlReminderID, reminders.UpdateReminderInput{URL: &newURL})
+		if uerr != nil {
+			log.Printf("FAIL: UpdateReminder with new URL: %v", uerr)
+			failed++
+		} else {
+			updated, _ := client.Reminder(urlReminderID)
+			if updated != nil && updated.URL == newURL {
+				log.Printf("PASS: URL update replaced cleanly")
+				passed++
+			} else {
+				log.Printf("FAIL: URL update did not take: got %q, want %q", updated.URL, newURL)
+				failed++
+			}
+		}
+
+		// Clear the URL by setting to empty string and verify read-back returns empty.
+		empty := ""
+		_, cerr := client.UpdateReminder(urlReminderID, reminders.UpdateReminderInput{URL: &empty})
+		if cerr != nil {
+			log.Printf("FAIL: UpdateReminder clearing URL: %v", cerr)
+			failed++
+		} else {
+			cleared, _ := client.Reminder(urlReminderID)
+			if cleared != nil && cleared.URL == "" {
+				log.Printf("PASS: URL cleared successfully")
+				passed++
+			} else {
+				log.Printf("FAIL: URL not cleared: got %q", cleared.URL)
+				failed++
+			}
+		}
+	}
+
+	// --- Test 15b: Flagged round-trip via private ReminderKit API ---
+	// Verifies the flagged property reads/writes through REMReminder since
+	// EventKit does not expose it. Visual check: open Reminders.app and
+	// confirm the flag pin appears/disappears as the test runs.
+	flagReminder, err := client.CreateReminder(reminders.CreateReminderInput{
+		Title:    "[go-eventkit test] Flagged Reminder",
+		ListName: defaultList,
+		Notes:    "Created by go-eventkit integration test. Safe to delete.",
+		Flagged:  true,
+	})
+	check("Create reminder with Flagged: true", err)
+
+	var flagReminderID string
+	if err == nil {
+		flagReminderID = flagReminder.ID
+		log.Printf("  Created flagged reminder: %q, Flagged=%v", flagReminder.Title, flagReminder.Flagged)
+		if !flagReminder.Flagged {
+			log.Printf("FAIL: Flagged=false on returned object after Create with Flagged: true")
+			failed++
+		} else {
+			passed++
+			// Refetch from store to confirm the flag survived persistence.
+			refetched, rerr := client.Reminder(flagReminderID)
+			if rerr != nil {
+				log.Printf("FAIL: could not refetch flagged reminder: %v", rerr)
+				failed++
+			} else if !refetched.Flagged {
+				log.Printf("FAIL: Flagged did not persist on fresh fetch: got false")
+				failed++
+			} else {
+				log.Printf("PASS: Flagged=true persisted on fresh fetch")
+				passed++
+			}
+		}
+
+		// Unflag via UpdateReminder and verify read-back returns false.
+		falseVal := false
+		_, uerr := client.UpdateReminder(flagReminderID, reminders.UpdateReminderInput{Flagged: &falseVal})
+		if uerr != nil {
+			log.Printf("FAIL: UpdateReminder unflag: %v", uerr)
+			failed++
+		} else {
+			unflagged, ferr := client.Reminder(flagReminderID)
+			if ferr != nil {
+				log.Printf("FAIL: could not refetch after unflag: %v", ferr)
+				failed++
+			} else if unflagged.Flagged {
+				log.Printf("FAIL: Unflag did not take: Flagged=%v", unflagged.Flagged)
+				failed++
+			} else {
+				log.Printf("PASS: Unflag persisted on fresh fetch")
+				passed++
+			}
+		}
+
+		// Re-flag via UpdateReminder and verify read-back returns true.
+		trueVal := true
+		_, rerr := client.UpdateReminder(flagReminderID, reminders.UpdateReminderInput{Flagged: &trueVal})
+		if rerr != nil {
+			log.Printf("FAIL: UpdateReminder re-flag: %v", rerr)
+			failed++
+		} else {
+			reflagged, ferr := client.Reminder(flagReminderID)
+			if ferr != nil {
+				log.Printf("FAIL: could not refetch after re-flag: %v", ferr)
+				failed++
+			} else if !reflagged.Flagged {
+				log.Printf("FAIL: Re-flag did not take: Flagged=%v", reflagged.Flagged)
+				failed++
+			} else {
+				log.Printf("PASS: Re-flag persisted on fresh fetch")
+				passed++
+			}
+		}
+	}
+
+	// --- Test 15c: Native tag round-trip via private ReminderKit API ---
+	tagReminder, err := client.CreateReminder(reminders.CreateReminderInput{
+		Title:    "[go-eventkit test] Tagged Reminder",
+		ListName: defaultList,
+		Notes:    "Created by go-eventkit integration test. Safe to delete.",
+		Tags:     []string{"goeventkit", "integration"},
+	})
+	check("Create reminder with native tags", err)
+
+	var tagReminderID string
+	if err == nil {
+		tagReminderID = tagReminder.ID
+		log.Printf("  Created tagged reminder: %q, Tags=%v", tagReminder.Title, tagReminder.Tags)
+		if !hasTags(tagReminder.Tags, "goeventkit", "integration") {
+			log.Printf("FAIL: returned tags = %v, want goeventkit+integration", tagReminder.Tags)
+			failed++
+		} else {
+			passed++
+		}
+
+		refetched, rerr := client.Reminder(tagReminderID)
+		if rerr != nil {
+			log.Printf("FAIL: could not refetch tagged reminder: %v", rerr)
+			failed++
+		} else if !hasTags(refetched.Tags, "goeventkit", "integration") {
+			log.Printf("FAIL: tags did not persist on fresh fetch: got %v", refetched.Tags)
+			failed++
+		} else {
+			log.Printf("PASS: tags persisted on fresh fetch")
+			passed++
+		}
+
+		filtered, ferr := client.Reminders(reminders.WithTags("goeventkit", "integration"))
+		if ferr != nil {
+			log.Printf("FAIL: filter reminders by native tags: %v", ferr)
+			failed++
+		} else if !containsReminderID(filtered, tagReminderID) {
+			log.Printf("FAIL: tag filter did not return tagged reminder")
+			failed++
+		} else {
+			log.Printf("PASS: tag filter returned tagged reminder")
+			passed++
+		}
+
+		replacementTags := []string{"replacement"}
+		_, uerr := client.UpdateReminder(tagReminderID, reminders.UpdateReminderInput{Tags: &replacementTags})
+		if uerr != nil {
+			log.Printf("FAIL: UpdateReminder replace tags: %v", uerr)
+			failed++
+		} else {
+			updated, ferr := client.Reminder(tagReminderID)
+			if ferr != nil {
+				log.Printf("FAIL: could not refetch after tag replace: %v", ferr)
+				failed++
+			} else if !hasTags(updated.Tags, "replacement") || hasTags(updated.Tags, "goeventkit") {
+				log.Printf("FAIL: tag replace did not take: got %v", updated.Tags)
+				failed++
+			} else {
+				log.Printf("PASS: tag replace persisted on fresh fetch")
+				passed++
+			}
+		}
+
+		emptyTags := []string{}
+		_, cerr := client.UpdateReminder(tagReminderID, reminders.UpdateReminderInput{Tags: &emptyTags})
+		if cerr != nil {
+			log.Printf("FAIL: UpdateReminder clear tags: %v", cerr)
+			failed++
+		} else {
+			cleared, ferr := client.Reminder(tagReminderID)
+			if ferr != nil {
+				log.Printf("FAIL: could not refetch after tag clear: %v", ferr)
+				failed++
+			} else if len(cleared.Tags) != 0 {
+				log.Printf("FAIL: tag clear did not take: got %v", cleared.Tags)
+				failed++
+			} else {
+				log.Printf("PASS: tag clear persisted on fresh fetch")
+				passed++
+			}
+		}
+	}
+
+	// --- Test 16: Create reminder with relative offset alarm ---
+	relAlarmReminder, err := client.CreateReminder(reminders.CreateReminderInput{
+		Title:    "[go-eventkit test] Relative Alarm",
+		ListName: defaultList,
+		DueDate:  &dueDate,
+		Notes:    "Created by go-eventkit integration test. Safe to delete.",
+		Alarms: []reminders.Alarm{
+			{RelativeOffset: -30 * time.Minute},
+		},
+	})
+	check("Create reminder with relative offset alarm", err)
+
+	var relAlarmID string
+	if err == nil {
+		relAlarmID = relAlarmReminder.ID
+		log.Printf("  Created relative alarm reminder: %q", relAlarmReminder.Title)
+	}
+
+	// --- Test 17: Filter by due date range ---
+	now := time.Now()
+	futureDate := now.Add(96 * time.Hour)
+	dueDateReminders, err := client.Reminders(reminders.WithDueAfter(now), reminders.WithDueBefore(futureDate))
+	check("Filter reminders by due date range", err)
+	if err == nil {
+		log.Printf("  Found %d reminders due in next 96 hours", len(dueDateReminders))
+	}
+
+	// --- Test 18: Get non-existent reminder ---
+	_, err = client.Reminder("non-existent-reminder-id-12345")
+	if err != nil {
+		log.Printf("PASS: Get non-existent reminder returns error: %v", err)
+		passed++
+	} else {
+		log.Printf("FAIL: Get non-existent reminder should return error")
+		failed++
+	}
+
+	// --- Test 20: Create reminder with daily recurrence ---
+	recDailyReminder, err := client.CreateReminder(reminders.CreateReminderInput{
+		Title:    "[go-eventkit test] Daily Recurring",
+		ListName: defaultList,
+		DueDate:  &dueDate,
+		Notes:    "Created by go-eventkit integration test. Safe to delete.",
+		RecurrenceRules: []eventkit.RecurrenceRule{
+			eventkit.Daily(1).Count(5),
+		},
+	})
+	check("Create reminder with daily recurrence", err)
+
+	var recDailyID string
+	if err == nil {
+		recDailyID = recDailyReminder.ID
+		log.Printf("  Created recurring reminder: %q, Recurring=%v, Rules=%d",
+			recDailyReminder.Title, recDailyReminder.Recurring, len(recDailyReminder.RecurrenceRules))
+		if !recDailyReminder.Recurring {
+			log.Printf("  FAIL: Expected recurring=true")
+			failed++
+		} else {
+			passed++
+		}
+		if len(recDailyReminder.RecurrenceRules) != 1 {
+			log.Printf("  FAIL: Expected 1 recurrence rule, got %d", len(recDailyReminder.RecurrenceRules))
+		} else if recDailyReminder.RecurrenceRules[0].Frequency != eventkit.FrequencyDaily {
+			log.Printf("  FAIL: Expected daily frequency, got %d", recDailyReminder.RecurrenceRules[0].Frequency)
+		}
+	}
+
+	// --- Test 21: Create reminder with weekly recurrence ---
+	endDate := time.Now().Add(90 * 24 * time.Hour)
+	recWeeklyReminder, err := client.CreateReminder(reminders.CreateReminderInput{
+		Title:    "[go-eventkit test] Weekly Recurring",
+		ListName: defaultList,
+		DueDate:  &dueDate,
+		Notes:    "Created by go-eventkit integration test. Safe to delete.",
+		RecurrenceRules: []eventkit.RecurrenceRule{
+			eventkit.Weekly(2, eventkit.Monday, eventkit.Friday).Until(endDate),
+		},
+	})
+	check("Create reminder with weekly recurrence", err)
+
+	var recWeeklyID string
+	if err == nil {
+		recWeeklyID = recWeeklyReminder.ID
+		log.Printf("  Created weekly recurring reminder: %q", recWeeklyReminder.Title)
+		if len(recWeeklyReminder.RecurrenceRules) == 1 {
+			rule := recWeeklyReminder.RecurrenceRules[0]
+			if rule.Frequency != eventkit.FrequencyWeekly {
+				log.Printf("  FAIL: Expected weekly frequency")
+				failed++
+			} else {
+				passed++
+			}
+			if rule.Interval != 2 {
+				log.Printf("  FAIL: Expected interval=2, got %d", rule.Interval)
+			}
+		}
+	}
+
+	// --- Test 22: Update reminder to add recurrence ---
+	if createdID != "" {
+		addRules := []eventkit.RecurrenceRule{eventkit.Daily(1).Count(3)}
+		updatedRec, err := client.UpdateReminder(createdID, reminders.UpdateReminderInput{
+			RecurrenceRules: &addRules,
+		})
+		check("Update reminder: add recurrence rule", err)
+		if err == nil {
+			log.Printf("  Updated reminder with recurrence: Recurring=%v, Rules=%d",
+				updatedRec.Recurring, len(updatedRec.RecurrenceRules))
+		}
+	}
+
+	// --- Test 23: Update reminder to remove recurrence ---
+	if createdID != "" {
+		emptyRules := []eventkit.RecurrenceRule{}
+		updatedNoRec, err := client.UpdateReminder(createdID, reminders.UpdateReminderInput{
+			RecurrenceRules: &emptyRules,
+		})
+		check("Update reminder: remove recurrence rules", err)
+		if err == nil {
+			log.Printf("  Removed recurrence: Recurring=%v, Rules=%d",
+				updatedNoRec.Recurring, len(updatedNoRec.RecurrenceRules))
+		}
+	}
+
+	// --- Test 24: Create reminder list ---
+	// Discover a writable source from existing lists.
+	var writableSource string
+	for _, l := range lists {
+		if !l.ReadOnly && l.Source != "" {
+			writableSource = l.Source
+			break
+		}
+	}
+	testList, err := client.CreateList(reminders.CreateListInput{
+		Title:  "[go-eventkit test] Integration List",
+		Color:  "#FF6961",
+		Source: writableSource,
+	})
+	check("Create reminder list", err)
+
+	var testListID string
+	if err == nil {
+		testListID = testList.ID
+		log.Printf("  Created list: %q (ID: %s)", testList.Title, truncateID(testList.ID))
+		log.Printf("  Color: %s, Source: %s, Count: %d, ReadOnly: %v", testList.Color, testList.Source, testList.Count, testList.ReadOnly)
+	}
+
+	// --- Test 25: Verify new list appears in lists ---
+	if testListID != "" {
+		allLists, err := client.Lists()
+		check("Verify new list in lists", err)
+		if err == nil {
+			found := false
+			for _, l := range allLists {
+				if l.ID == testListID {
+					found = true
+					log.Printf("  Found new list: %q", l.Title)
+					break
+				}
+			}
+			if !found {
+				log.Printf("  FAIL: New list not found in lists")
+				failed++
+			}
+		}
+	}
+
+	// --- Test 26: Update list (rename + recolor) ---
+	if testListID != "" {
+		newTitle := "[go-eventkit test] Renamed List"
+		newColor := "#00FF00"
+		updatedList, err := client.UpdateList(testListID, reminders.UpdateListInput{
+			Title: &newTitle,
+			Color: &newColor,
+		})
+		check("Update list (rename + recolor)", err)
+		if err == nil {
+			if updatedList.Title != newTitle {
+				log.Printf("  FAIL: Title not updated: got %q, want %q", updatedList.Title, newTitle)
+				failed++
+			} else {
+				log.Printf("  Renamed list to: %q", updatedList.Title)
+			}
+		}
+	}
+
+	// --- Test 27: Create reminder in new list (full fields, for move survival) ---
+	var listTestReminderID string
+	moveDue := time.Now().Add(72 * time.Hour).Truncate(time.Minute)
+	if testListID != "" {
+		listTestReminder, err := client.CreateReminder(reminders.CreateReminderInput{
+			Title:    "[go-eventkit test] Reminder in New List",
+			ListName: "[go-eventkit test] Renamed List",
+			Notes:    "Created by go-eventkit integration test. Safe to delete.",
+			DueDate:  &moveDue,
+			Priority: reminders.PriorityHigh,
+			URL:      "https://example.com/move-survival",
+			Flagged:  true,
+			Tags:     []string{"goeventkitmove"},
+			Alarms:   []reminders.Alarm{{RelativeOffset: -30 * time.Minute}},
+			RecurrenceRules: []eventkit.RecurrenceRule{
+				{Frequency: eventkit.FrequencyWeekly, Interval: 1},
+			},
+		})
+		check("Create reminder in new list", err)
+		if err == nil {
+			listTestReminderID = listTestReminder.ID
+			log.Printf("  Created reminder in new list: %q", listTestReminder.Title)
+		}
+	}
+
+	// --- Test 27b: Move reminder to another list, all fields survive ---
+	if listTestReminderID != "" {
+		moved, err := client.UpdateReminder(listTestReminderID, reminders.UpdateReminderInput{
+			ListName: &defaultList,
+		})
+		check("Move reminder to another list", err)
+		if err == nil {
+			fieldFail := func(field string, got, want any) {
+				log.Printf("  FAIL: %s not preserved across move: got %v, want %v", field, got, want)
+				failed++
+			}
+			if moved.List != defaultList {
+				fieldFail("List", moved.List, defaultList)
+			}
+			if moved.ID != listTestReminderID {
+				fieldFail("ID", truncateID(moved.ID), truncateID(listTestReminderID))
+			}
+			if moved.Title != "[go-eventkit test] Reminder in New List" {
+				fieldFail("Title", moved.Title, "[go-eventkit test] Reminder in New List")
+			}
+			if moved.Notes != "Created by go-eventkit integration test. Safe to delete." {
+				fieldFail("Notes", moved.Notes, "(original notes)")
+			}
+			if moved.DueDate == nil || !moved.DueDate.Equal(moveDue) {
+				fieldFail("DueDate", moved.DueDate, moveDue)
+			}
+			if moved.Priority != reminders.PriorityHigh {
+				fieldFail("Priority", moved.Priority, reminders.PriorityHigh)
+			}
+			if moved.URL != "https://example.com/move-survival" {
+				fieldFail("URL", moved.URL, "https://example.com/move-survival")
+			}
+			if !moved.Flagged {
+				fieldFail("Flagged", moved.Flagged, true)
+			}
+			if !hasTags(moved.Tags, "goeventkitmove") {
+				fieldFail("Tags", moved.Tags, []string{"goeventkitmove"})
+			}
+			if len(moved.Alarms) != 1 || moved.Alarms[0].RelativeOffset != -30*time.Minute {
+				fieldFail("Alarms", moved.Alarms, "1 alarm at -30m")
+			}
+			if !moved.Recurring || len(moved.RecurrenceRules) != 1 || moved.RecurrenceRules[0].Frequency != eventkit.FrequencyWeekly {
+				fieldFail("RecurrenceRules", moved.RecurrenceRules, "weekly x1")
+			}
+			log.Printf("  Moved reminder to %q, ID stable, fields preserved", moved.List)
+		}
+	}
+
+	// --- Test 28: Delete reminder in new list before deleting list ---
+	if listTestReminderID != "" {
+		err := client.DeleteReminder(listTestReminderID)
+		check("Delete reminder in new list", err)
+	}
+
+	// --- Test 29: Delete list ---
+	if testListID != "" {
+		err := client.DeleteList(testListID)
+		check("Delete list", err)
+		if err == nil {
+			log.Printf("  Deleted list: %s", truncateID(testListID))
+		}
+	}
+
+	// --- Test 30: Verify deleted list is gone ---
+	if testListID != "" {
+		allLists, err := client.Lists()
+		check("Verify deleted list is gone", err)
+		if err == nil {
+			found := false
+			for _, l := range allLists {
+				if l.ID == testListID {
+					found = true
+				}
+			}
+			if found {
+				log.Printf("  FAIL: Deleted list still in lists")
+				failed++
+			} else {
+				log.Printf("  Deleted list confirmed gone")
+			}
+		}
+	}
+
+	// --- Cleanup: Delete all test reminders ---
+	log.Println("\n--- Cleanup ---")
+	cleanupIDs := []string{createdID, alarmReminderID, urlReminderID, flagReminderID, tagReminderID, relAlarmID, recDailyID, recWeeklyID}
+	for _, id := range cleanupIDs {
+		if id == "" {
+			continue
+		}
+		err := client.DeleteReminder(id)
+		if err != nil {
+			log.Printf("WARN: Failed to delete reminder %s: %v", truncateID(id), err)
+		} else {
+			log.Printf("  Deleted reminder: %s", truncateID(id))
+		}
+	}
+
+	// --- Test 19: Verify deleted reminder is gone ---
+	if createdID != "" {
+		_, err := client.Reminder(createdID)
+		if err != nil {
+			log.Printf("PASS: Deleted reminder not found (expected)")
+			passed++
+		} else {
+			log.Printf("FAIL: Deleted reminder still accessible")
+			failed++
+		}
+	}
+
+	// --- Summary ---
+	fmt.Printf("\n=== Reminders Integration Test Results ===\n")
+	fmt.Printf("Passed: %d\n", passed)
+	fmt.Printf("Failed: %d\n", failed)
+	fmt.Printf("Total:  %d\n", passed+failed)
+	if failed > 0 {
+		os.Exit(1)
+	}
+}
+
+func truncateID(id string) string {
+	if len(id) > 8 {
+		return id[:8] + "..."
+	}
+	return id
+}
+
+func hasTags(tags []string, want ...string) bool {
+	seen := make(map[string]bool, len(tags))
+	for _, tag := range tags {
+		seen[tag] = true
+	}
+	for _, tag := range want {
+		if !seen[tag] {
+			return false
+		}
+	}
+	return true
+}
+
+func containsReminderID(items []reminders.Reminder, id string) bool {
+	for _, item := range items {
+		if item.ID == id {
+			return true
+		}
+	}
+	return false
+}

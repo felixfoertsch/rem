@@ -90,6 +90,52 @@ Aliases: `get`
 
 ---
 
+## rem participants
+
+```fish
+rem participants --list "Family" -o json
+```
+
+`--list` / `-l` is required: exact list name or ID. Lists existing shared-list participants; does not invite anyone. JSON array fields: `id`, `name`, optional `address`, `access_level`, `is_me`. IDs are scoped to this list; `access_level` is an opaque native value. Avoid printing unrelated participant addresses.
+
+## rem assign
+
+```fish
+rem assign abc12345 me -o json
+rem assign abc12345 "Exact Participant Name" -o json
+rem assign abc12345 person@example.com -o json
+rem assign abc12345 --none -o json
+rem show abc12345 -o json
+```
+
+Supply one unique reminder ID/prefix and exactly one participant, or `--none` without a participant. Participant resolution: exact ID, case-insensitive email (with optional `mailto:`), case-insensitive name, or native current-user `me`. Ambiguous/unknown people and unresolved self identity fail before saving. No `--experimental`, `--assignee`, or `--assign` flag is needed or supported. Assignment is a separate command, not an `add`/`update` flag.
+
+JSON result and show/list metadata contain `assigned_to`, `assignment_available`, and optional `assignment_error`. The assigned participant uses the fields above. Only `assignment_available: true` with `assigned_to: null` means unassigned. Unavailable metadata is not proof of no assignment. Table/plain show/list output also displays assignment state.
+
+Assignment replacement uses one native transaction; identical assignment/unassignment is a no-op. Writes fail on unavailable API, read-only list, missing identity, save error, or failed readback. A post-save verification failure may leave the requested change saved: inspect before retrying. Verify with a separate `show`; local native readback does not prove iCloud synchronization or notifications.
+
+## rem sections / rem section
+
+```fish
+rem sections --list "Family" -o json
+rem section create "Planning" --list "Family" -o json
+rem section rename "Planning" "Next" --list "Family" -o json
+```
+
+`--list` / `-l` requires an exact list name or ID. Rename accepts a section name or ID plus the new name. Listing returns objects with `id` and `name`. Successful create/rename JSON contains `ok: true` and `operation: "section-create"` or `"section-rename"`; native names are read back after saving. No experimental opt-in flag.
+
+Not implemented: per-reminder membership, moving reminders into sections, `update --section`, filtering by section, section deletion, or a per-reminder section output field. Do not simulate these by rewriting ordering data.
+
+## rem doctor
+
+```fish
+rem doctor
+```
+
+Always emits JSON diagnostics. Reads authorization status and native selector availability without opening an event store or requesting Reminders access. It does not test live shared-account writes. For access denial, approve a data command from a supported terminal and check permissions for its responsible host application. Do not bypass TCC or modify another application's signature.
+
+---
+
 ## rem update
 
 Update properties of an existing reminder.
@@ -111,7 +157,7 @@ rem update abc12345 --remove-tags "urgent"      # Remove tags
 rem update abc12345 -i            # Interactive mode
 ```
 
-**Shared lists.** Moving a reminder to or from a shared list has no true move on macOS: rem copies the reminder to the target and deletes the original, so it gets a **new ID** (rem warns on stderr and prints the new ID). rem **prompts for confirmation** before such a move; non-interactive runs error out unless `--force`/`-y`/`--yes` is passed. Agents: get the user's OK in conversation before passing `-y` — the prompt protects data on a list other people see. Re-resolve the ID afterwards. Plain moves keep the ID and never prompt.
+**Shared lists.** Moving a reminder to or from a shared list has no true move on macOS: rem copies the reminder to the target and deletes the original, so it gets a **new ID** (rem warns on stderr and prints the new ID). rem **prompts for confirmation** before such a move; non-interactive runs error out unless `--force`/`-y`/`--yes` is passed. Agents: get the user's OK in conversation before passing `-y` — the prompt protects data on a list other people see. Re-resolve the ID afterwards. Copy/delete does not preserve assignment; resolve participants in the destination list before any explicitly requested reassignment. Plain moves keep the ID and never prompt.
 
 **URLs.** `--url` writes to the native Reminders.app URL field (not notes/body). Pass `--url ""` to clear the URL.
 
@@ -355,7 +401,7 @@ rem upcoming -o json
 
 ## rem export
 
-Export reminders to JSON or CSV.
+Export reminders to JSON or CSV. JSON includes assignment metadata; CSV does not preserve it.
 
 ```bash
 rem export > all.json
@@ -375,7 +421,7 @@ rem export --incomplete --format json
 
 ## rem import
 
-Import reminders from a JSON or CSV file.
+Import reminders from a JSON or CSV file. JSON import deliberately ignores assignment metadata: participant IDs belong to the original list. Resolve destination participants and explicitly assign imported reminders only when requested.
 
 ```bash
 rem import work.json
@@ -481,7 +527,9 @@ rem version
 
 ## Global Behavior
 
-- All read commands accept `-o` / `--output` for format selection (table, json, plain)
+- Use `-o json` for machine-readable results. Core reads support table/json/plain; collaboration commands use JSON or command-specific text, and doctor always emits JSON.
+- Help, version, completion, skills, and doctor do not request Reminders access; data commands initialize access lazily.
+- Fork main builds enable assignment and section writes by default; no `--experimental` flag.
 - `NO_COLOR=1` environment variable disables color output
 - `REM_NO_UPDATE_CHECK=1` environment variable disables the background update check
 - ID arguments accept prefix matches — pass any unique prefix of a short ID

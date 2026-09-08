@@ -43,8 +43,6 @@ macOS Gatekeeper and Reminders permission requirements still apply. This fork's
 by default, without an extra opt-in flag. Producing binaries does not replace the
 live-account acceptance checklist in [collaboration.md](collaboration.md) before
 a validated manual release.
-The upstream Homebrew/install-script instructions install upstream releases, not
-these development snapshots.
 
 Artifacts are retained for **90 days**. They are not permanent release storage.
 Download copies you need to retain longer. You can re-run a historical workflow

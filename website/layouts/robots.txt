@@ -1,9 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: {{ "sitemap.xml" | absURL }}
-
-# LLM crawler discovery (llms.txt protocol)
-# https://llmstxt.org/
-# Full index: {{ "llms.txt" | absURL }}
-# Full content: {{ "llms-full.txt" | absURL }}

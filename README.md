@@ -1,78 +1,60 @@
 # rem
 
-A blazing fast CLI for macOS Reminders. Sub-200ms reads AND writes via EventKit, natural language dates, and import/export — all in a single binary.
+macOS Reminders CLI with native assignment, list sections, natural language dates, and import/export — all in one binary. This is the [felixfoertsch fork](https://github.com/felixfoertsch/rem) of [BRO3886/rem](https://github.com/BRO3886/rem).
 
-**[Documentation](https://rem.sidv.dev)** | **[Architecture](https://rem.sidv.dev/docs/architecture/)** | **[go-eventkit](https://github.com/BRO3886/go-eventkit)**
+**[Builds and installation](docs/builds.md)** | **[Collaboration](docs/collaboration.md)** | **[Permissions](docs/troubleshooting.md)** | **[Command reference](skills/rem-cli/references/commands.md)**
+
+`main` is experimental. Assignment and section writes are enabled by default, without `--experimental`; native permission, identity, save, and readback checks remain enforced. Local readback does not prove iCloud synchronization or notifications.
 
 ## Features
 
 - **Sub-200ms reads AND writes** — EventKit via cgo (go-eventkit), direct memory access, no IPC
 - **Single binary** — EventKit compiled in via cgo, no helper processes
 - **Natural language dates** — `tomorrow`, `next friday at 2pm`, `in 3 hours`, `eod`
-- **20 commands** — full CRUD, search, stats, overdue, upcoming, interactive mode
+- **Reminder commands** — full CRUD, search, stats, overdue, upcoming, interactive mode
+- **Assignments** — list participants, assign to an existing participant or `me`, clear assignment, and inspect availability-aware metadata
+- **Sections** — list, create, and rename native sections; membership/move/filter/delete are not implemented
+- **Permission diagnostics** — `rem doctor` without requesting Reminders access
 - **Multiple output formats** — table, JSON, plain text
 - **Native tags** — `#hashtag` in titles or `--tags` flag, stored as real Reminders.app tags
 - **Location reminders** — geofence triggers via `--location "lat,lng"`, fire on arrival or departure
 - **Shared list support** — full CRUD on shared lists, sharing state in `rem lists`, and moves across the shared-list boundary via copy (macOS has no true move there)
-- **Import/Export** — JSON and CSV with full property round-trip (including tags and location triggers)
+- **Import/Export** — JSON and CSV with tags and location triggers; JSON exports assignment metadata, but imports do not replay list-scoped assignments
 - **Powered by [go-eventkit](https://github.com/BRO3886/go-eventkit)** — use the same library directly for programmatic Go access
 - **Shell completions** — bash, zsh, fish
 
 ## Installation
 
-### Homebrew
+### Download a main build
 
-```bash
-brew tap BRO3886/tap
-brew install rem-cli
-```
+Download `rem-macos-<full-commit-sha>` from a successful [Build binaries run](https://github.com/felixfoertsch/rem/actions/workflows/build.yml). GitHub sign-in is required. Each artifact includes Apple Silicon and Intel archives plus SHA-256 checksums. Follow [download, verification, and installation instructions](docs/builds.md).
 
-### Quick install (recommended)
-
-```bash
-curl -fsSL https://rem.sidv.dev/install | bash
-```
-
-Downloads the latest release, extracts, and installs to `~/.local/bin` (override with `INSTALL_DIR=...`). No sudo needed.
-
-### Via Go
-
-```bash
-go install github.com/BRO3886/rem/cmd/rem@latest
-```
-
-Requires Go 1.21+ and Xcode Command Line Tools (cgo compiles EventKit bindings).
-
-### Manual download
-
-Download from [GitHub Releases](https://github.com/BRO3886/rem/releases):
-
-```bash
-# Apple Silicon
-curl -LO https://github.com/BRO3886/rem/releases/latest/download/rem-darwin-arm64.tar.gz
-tar xzf rem-darwin-arm64.tar.gz
-mkdir -p ~/.local/bin && mv rem ~/.local/bin/rem
-
-# Intel
-curl -LO https://github.com/BRO3886/rem/releases/latest/download/rem-darwin-amd64.tar.gz
-tar xzf rem-darwin-amd64.tar.gz
-mkdir -p ~/.local/bin && mv rem ~/.local/bin/rem
-```
+Artifacts are built for every new main commit and retained for 90 days. These snapshots are not Developer ID signed or notarized. Releases and tags remain manual; there is no moving latest-release installer.
 
 ### Build from source
 
-```bash
-git clone https://github.com/BRO3886/rem.git
+Use the Go version required by `go.mod` and Xcode Command Line Tools for cgo/framework headers.
+
+```fish
+git clone https://github.com/felixfoertsch/rem.git
 cd rem
 make build
-# Binary is at ./bin/rem
+./bin/rem version
 ```
+
+Binary: `bin/rem`. The Go module retains its upstream import path for compatibility; build this checkout rather than installing the upstream module remotely.
+
+## Bundled EventKit library
+
+`go-eventkit/` contains upstream `v0.13.0` as a self-contained Go module, including its MIT license and tests. Root `go.mod` resolves `github.com/BRO3886/go-eventkit` locally; normal clones include everything without submodule setup. See [source provenance and update procedure](go-eventkit/UPSTREAM.md).
+
+`make test` and `make lint` check both modules. To work on the library alone, run Go commands from `go-eventkit/`. Root `go test ./...` does not traverse nested modules. Assignment code remains in `internal/reminderkit/` for now.
 
 ## Requirements
 
-- macOS 13+ (uses EventKit + private ReminderKit bridge for all reads and writes via go-eventkit, AppleScript only for default list name query)
+- macOS 13+ for core EventKit support; collaboration uses runtime-guarded private ReminderKit APIs and needs account-specific validation
 - Xcode Command Line Tools (for building from source — cgo/clang + framework headers)
-- First run will prompt for Reminders app access in System Settings > Privacy & Security
+- Data commands need Reminders permission for their responsible host application; help/version/doctor do not request access. See [permission troubleshooting](docs/troubleshooting.md).
 
 ## Quick Start
 
@@ -161,6 +143,21 @@ rem list-mgmt rename "Old Name" "New Name"
 rem list-mgmt delete "Name"         # Asks for confirmation
 rem lm rm "Name" --force
 ```
+
+### Assignments, sections, and diagnostics
+
+```fish
+rem participants --list "Family" -o json
+rem assign <id> me -o json
+rem show <id> -o json
+rem assign <id> --none -o json
+rem sections --list "Family" -o json
+rem section create "Planning" --list "Family"
+rem section rename "Planning" "Next" --list "Family"
+rem doctor
+```
+
+Assignment uses exact participant identity, never invitations or sharing changes. A null assignee means unassigned only when `assignment_available` is true. Writes validate a fresh native readback; verification failure after a save does not imply rollback. Shared-list moves and imports do not preserve assignment. See [collaboration contracts and live validation limits](docs/collaboration.md).
 
 ### Search & Analytics
 
@@ -333,13 +330,13 @@ rem/
 │   ├── update/           # Background update check (GitHub releases)
 │   └── ui/               # Table formatting, colored output
 ├── skills/rem-cli/       # Embedded agent skill files
-├── website/              # Hugo documentation site
+├── docs/                 # Builds, collaboration contracts, troubleshooting
 ├── Makefile
 ├── LICENSE
 └── README.md
 ```
 
-**All reads and writes** — including reminder CRUD and list CRUD — go through `go-eventkit` (`github.com/BRO3886/go-eventkit`) — an Objective-C EventKit bridge compiled into the binary via cgo. Direct in-process access to the Reminders store, no IPC. All operations complete in under 200ms.
+**Core reads and writes** — including reminder CRUD and list CRUD — go through `go-eventkit` (`github.com/BRO3886/go-eventkit`) — an Objective-C EventKit bridge compiled into the binary via cgo. Direct in-process access to the Reminders store, no IPC. Assignments, participants, sections, and diagnostics use the fork's `internal/reminderkit` extension. Runtime latency depends on the host and account.
 
 **Flagged, tag, and list-sharing operations** use the private ReminderKit bridge in go-eventkit — EventKit doesn't expose these properties, but `REMReminder.flagged`, `REMReminder.hashtags`, and `REMList.isShared` do. Tags degrade gracefully if the private API becomes unavailable. AppleScript is only used for the default list name query.
 
@@ -357,7 +354,7 @@ Tested with 224 reminders across 12 lists:
 | `rem search` | 0.11s |
 | `rem stats` | 0.17s |
 
-See [Performance docs](https://rem.sidv.dev/docs/performance/) for the full optimization story (JXA at 60s → EventKit at 0.13s).
+These inherited upstream measurements are not latency guarantees for this fork or its collaboration bridge. Measure the actual host/account when performance matters.
 
 ## Known Limitations
 

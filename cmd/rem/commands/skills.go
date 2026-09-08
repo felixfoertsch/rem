@@ -48,7 +48,7 @@ Without --agent, shows an interactive picker to select which agents to install f
 
 The skill files are documentation (SKILL.md + reference pages) that teach AI
 agents how to invoke rem. They contain the same information published at
-https://rem.sidv.dev/docs — use --dry-run to preview what will be written.`,
+https://github.com/felixfoertsch/rem/tree/main/skills/rem-cli — use --dry-run to preview what will be written.`,
 	RunE: runSkillsInstall,
 }
 
@@ -98,7 +98,7 @@ func runSkillsInstall(cmd *cobra.Command, args []string) error {
 func confirmInstall(targets []skills.AgentTarget, homeDir string) (bool, error) {
 	cyan := color.New(color.FgCyan)
 	cyan.Println("\nThe skill files are documentation that teaches AI agents how to use rem.")
-	cyan.Println("They contain the same content published at https://rem.sidv.dev/docs")
+	cyan.Println("They contain the same content published at https://github.com/felixfoertsch/rem/tree/main/skills/rem-cli")
 	fmt.Println("\nThe following paths will be created:")
 	for _, t := range targets {
 		fmt.Printf("  • %s\n", skills.DisplayPath(skills.SkillDir(t), homeDir))
@@ -142,7 +142,7 @@ func printDryRun(embeddedFS fs.FS, targets []skills.AgentTarget, homeDir string)
 		fmt.Printf("  %s\n\n", skills.VersionFileName)
 	}
 
-	fmt.Println("These are the same docs published at https://rem.sidv.dev/docs")
+	fmt.Println("These are the same docs published at https://github.com/felixfoertsch/rem/tree/main/skills/rem-cli")
 	fmt.Println("Run without --dry-run to install.")
 	return nil
 }

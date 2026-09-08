@@ -4,7 +4,7 @@ COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
 BUILD_TIME=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 LDFLAGS=-ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildTime=$(BUILD_TIME)"
 
-.PHONY: all build install test clean lint fmt help completions release indexnow
+.PHONY: all build install test clean lint fmt help completions release
 
 all: build
 
@@ -15,14 +15,17 @@ build: ## Build the binary (includes EventKit via cgo)
 install: build ## Install the binary to $GOPATH/bin
 	go install $(LDFLAGS) ./cmd/rem/
 
-test: ## Run tests
+test: ## Run tests in both modules
 	go test ./... -v
+	cd go-eventkit && go test ./... -v
 
 test-short: ## Run tests without integration tests
 	go test ./... -short -v
+	cd go-eventkit && go test ./... -short -v
 
 lint: ## Run linter
 	go vet ./...
+	cd go-eventkit && go vet ./...
 
 fmt: ## Format code
 	go fmt ./...
@@ -37,9 +40,6 @@ release: ## Build release tarballs for GitHub upload (arm64 + amd64)
 		rm bin/rem; \
 	done
 	@echo "Upload bin/rem-darwin-{arm64,amd64}.tar.gz to GitHub Releases"
-
-indexnow: ## Submit live sitemap URLs to IndexNow (run after a content-changing deploy)
-	@sh scripts/indexnow.sh
 
 clean: ## Remove built binaries
 	rm -rf bin/

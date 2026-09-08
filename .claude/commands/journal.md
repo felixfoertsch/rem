@@ -45,5 +45,5 @@ Write a journal entry for today's work session on the `rem` project.
 
 After writing the journal entry, also update:
 
-- **`CLAUDE.md`** — Update implementation status, coverage numbers, integration test counts, and any new architecture/patterns added during the session.
+- **`AGENTS.md`** — Update implementation status, coverage numbers, integration test counts, and any new architecture/patterns added during the session.
 - **Auto memory `MEMORY.md`** — Update project status, coverage numbers, and add any new key patterns or architecture decisions discovered during the session.

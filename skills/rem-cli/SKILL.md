@@ -1,175 +1,69 @@
 ---
 name: rem-cli
-description: Create, list, update, complete, tag, and search macOS Reminders via the rem CLI. Use when the user wants to manage Apple Reminders from the terminal, automate reminder workflows, reference reminders in shell scripts, or schedule anything on macOS.
+description: Manage macOS Reminders with the felixfoertsch/rem fork. Use for reminder CRUD, assignment to shared-list participants, unassignment, native list sections, permission diagnostics, and reminder automation.
 license: MIT
-compatibility: Requires macOS with the rem CLI installed (https://rem.sidv.dev)
-allowed-tools: Bash(rem *) Bash(echo *)
-argument-hint: "[natural language request]"
+compatibility: Requires macOS with felixfoertsch/rem installed
 metadata:
-  author: BRO3886
-  homepage: https://github.com/BRO3886/rem
+  author: BRO3886, felixfoertsch
+  homepage: https://github.com/felixfoertsch/rem
 ---
 
-# rem — macOS Reminders from the terminal
+# rem — macOS Reminders
 
-rem is a single-binary Go CLI that reads and writes the Apple Reminders database in under 200ms via EventKit (cgo). Every `rem` invocation is fast and safe to run.
+Use this fork's CLI, not upstream binaries. Inspect `rem version` and unfamiliar command `--help` before acting. Main snapshots enable collaboration writes by default; no `--experimental` flag. Private APIs remain experimental and account-dependent.
 
-## Relative time
+## Install and permissions
 
-**When the user says relative dates like "tomorrow", "next friday", "end of week", or "last tuesday", use the `--due` flag. Don't guess from training data.**
+Download a successful main artifact from [Build binaries](https://github.com/felixfoertsch/rem/actions/workflows/build.yml), following [build instructions](https://github.com/felixfoertsch/rem/blob/main/docs/builds.md). Artifacts include both Mac architectures and checksums, expire after 90 days, and are not Developer ID signed or notarized. Releases are manual.
 
-rem's `--due` flag accepts natural language directly (see [references/dates.md](references/dates.md)), so in many cases you can pass the user's phrase through verbatim.
+Help, version, completions, skills, and `rem doctor` need no Reminders access. Data commands initialize access lazily. Doctor reports authorization and native capability presence, not proof of live account support.
 
-## When to use this skill
+If denied, ask the user to run `rem lists` in a supported terminal and approve the system prompt. Check System Settings > Privacy & Security > Reminders for the launching terminal/IDE/agent host. Never edit TCC, disable SIP, reset unrelated permissions, or claim the CLI can repair another host's entitlements.
 
-Use rem any time the user wants to:
+## Commands
 
-- Add, list, search, complete, or delete macOS Reminders
-- Summarize "what's due today" / "what's overdue" / "what's coming up"
-- Capture quick tasks from natural language ("remind me to call dentist tomorrow")
-- Move reminders between lists, reprioritize, or add URLs and notes
-- Export reminders to JSON / CSV, or import them back
-- Manage reminder lists (create, rename, delete)
-
-Do NOT use rem for:
-
-- Calendar events (use `ical` if available, or AppleScript with Calendar.app)
-- Other Apple apps (Notes, Messages, Mail)
-
-## Quick decision tree
-
-| User intent | Command to reach for |
+| Intent | Command |
 |---|---|
-| "what's on my plate" / "today" / "what's overdue" | `rem today`, `rem overdue`, `rem upcoming --days N` |
-| "remind me to X (tomorrow / friday / etc)" | `rem add "X" --due <date>` |
-| "remind me about X at Y time" | `rem add "X" --due "<date> <time>"` — notification is automatic |
-| "remind me 15 minutes before" | add `--remind-me 15m` to `rem add` |
-| "make that one silent / no notification" | add `--silent` to `rem add` (not available in `-i` mode, see gotchas) |
-| "tell me more about X" / "show that reminder" | `rem show <short-id>` |
-| "mark X as done" / "mark these done" | `rem complete <short-id>...` (supports multiple IDs) |
-| "undo that / mark X as not done" | `rem uncomplete <short-id>...` (supports multiple IDs) |
-| "delete X" | `rem delete <short-id>...` (supports multiple IDs) |
-| "find reminders about X" | `rem search "X"` |
-| "flag / unflag X" | `rem flag <short-id>...` or `rem unflag <short-id>...` (supports multiple IDs) |
-| "show me flagged stuff" | `rem list --flagged` |
-| "move X to list Y" | `rem update <short-id> --list "Y"` (if Y or source is shared: confirm with user first, then `-f` — see gotchas) |
-| "change priority to high" | `rem update <short-id> --priority high` |
-| "add notes to X" | `rem update <short-id> --notes "..."` |
-| "tag this as work" / "add tags" | `rem add "Task #work"` or `rem update <short-id> --add-tags "work,urgent"` |
-| "remove the urgent tag" | `rem update <short-id> --remove-tags "urgent"` |
-| "make it repeat weekly / monthly" | `rem add ... --repeat weekly` or `--repeat "weekly on mon,wed,fri"` |
-| "remind me when I get to / leave X" | `rem add "..." --location "lat,lng"` (+ `--on-leave` for departure) — see location section |
-| "clear the due date on X" | `rem update <short-id> --due none` |
-| "what lists do I have" | `rem lists` (add `--count` for per-list totals) |
-| "how many reminders total / stats" | `rem stats` |
-| "export my Work list" | `rem export --list Work --format json --output-file work.json` |
-| "import this CSV" | `rem import file.csv --dry-run` first, then without |
+| Create | `rem add "TITLE" --list "LIST" -o json` |
+| Read | `rem list --list "LIST" --incomplete -o json`; `rem show <id> -o json` |
+| Search | `rem search "QUERY" --list "LIST" -o json` |
+| Due work | `rem today`; `rem overdue`; `rem upcoming --days 7` |
+| Edit | `rem update <id> --title "TITLE" --notes "NOTES"` |
+| Complete/undo | `rem complete <id>...`; `rem uncomplete <id>...` |
+| Flag/undo | `rem flag <id>...`; `rem unflag <id>...` |
+| Delete | `rem delete <id>...` (confirmation required) |
+| Lists | `rem lists -o json`; `rem list-mgmt create "LIST"` |
+| Participants | `rem participants --list "LIST" -o json` |
+| Assign/clear | `rem assign <id> me -o json`; `rem assign <id> --none -o json` |
+| Sections | `rem sections --list "LIST" -o json` |
+| Create/rename section | `rem section create "NAME" --list "LIST"`; `rem section rename "OLD" "NEW" --list "LIST"` |
+| Export/import | `rem export --list "LIST" --format json`; `rem import file.json --dry-run` |
 
-For full flag details on any command, load [references/commands.md](references/commands.md).
+Full flags: [references/commands.md](references/commands.md). Relative dates: [references/dates.md](references/dates.md). Pass natural language directly to date flags; read the current local clock when exact ISO boundaries are needed. Do not guess dates or execute illustrative mutation commands blindly.
 
-## Batch everything into one tool call
+## Assignment workflow
 
-Every `rem` invocation is <200ms, so the expensive part is YOUR round trip, not the command. Two rules:
+1. Resolve the reminder and list. Enumerate that list's participants, projecting only needed fields rather than exposing unrelated addresses.
+2. Use native `is_me` and the selector `me` for the current user. Otherwise use exact list-scoped participant ID, case-insensitive email (including `mailto:`), or case-insensitive name. Ambiguous names and unresolved identity fail; never infer self from shell username or invite someone to make assignment work.
+3. For create-and-assign, capture `id` from `rem add ... -o json`, then call `rem assign <id> me -o json`. Assignment is not an add/update flag. If assignment fails, report the created ID; do not create duplicates or delete it without approval.
+4. Read `rem show <id> -o json` in a separate command. Require `assignment_available: true` and matching `assigned_to.id`, or `assigned_to.is_me: true` for self. For explicit unassignment, verify availability is true and `assigned_to` is null.
 
-1. **Multiple IDs, one command.** `complete`, `uncomplete`, `flag`, `unflag`, and `delete` all accept multiple IDs: `rem complete AB12 CD34 EF56`. Never loop one ID per call.
-2. **Multiple commands, one Bash call.** When answering one question needs several rem reads (or independent writes), chain them with `;` and header markers in a single Bash invocation — never run them as separate tool calls. See the daily briefing pattern below.
+`assigned_to: null` means unassigned only when `assignment_available` is true. Otherwise report unknown/unavailable and inspect `assignment_error`. Core reads can succeed with warnings; assignment writes fail on permission, identity, save, or verification errors. `access_level` is opaque, not a stable permission enum.
 
-## Output formats (always set one when scripting)
+A post-save verification failure is not a rollback: inspect before retrying. Repeating the same assignment is a no-op. Local readback does not prove iCloud synchronization, notification delivery, or owner/invitee compatibility; use approved disposable data and inspect other devices when testing those properties.
 
-Every read command supports `-o table|json|plain`. Default is `table` (colored ASCII). When piping to another tool, into a script, or when you need to parse the result, use `-o json`:
+JSON export includes assignment metadata; import ignores it because participant IDs are list-scoped. Shared-list copy/delete moves do not preserve assignment. Resolve destination participants and explicitly reassign only when requested.
 
-```bash
-rem today -o json | jq '.[] | .name'
-rem overdue -o json | jq 'length'
-rem list --incomplete --list Work -o json
-```
+## Limits and data safety
 
-`NO_COLOR=1` disables colors. `REM_NO_UPDATE_CHECK=1` disables the background update check (set it when scripting to avoid stray output).
+- Sections support listing, creation, and renaming only. No per-reminder membership, `update --section`, section filtering/deletion, or per-reminder section JSON field exists.
+- Shared-list moves copy/delete with a new reminder ID. Explain this and obtain user confirmation before passing `--force`/`--yes`/`-y`; re-resolve the new ID afterward. Ordinary moves preserve IDs.
+- Use `-o json` for scripts. Core reads support table/JSON/plain; collaboration commands use JSON or command-specific text; doctor always emits JSON. `REM_NO_UPDATE_CHECK=1` disables release notices; `NO_COLOR=1` disables colors. Preserve stderr warnings while parsing stdout.
+- Use one multi-ID command for complete/uncomplete/flag/unflag/delete, not a per-ID loop. Keep independent calls separate; do not hide failures behind chained header output.
+- `--due` auto-attaches a due-time alarm; `--silent` disables it. Do not add `--remind-me 0m` to enable the default. Clear due dates with `--due none`.
+- Time alarms and geofences are independent: `--remind-me none` preserves geofences; `--location none` preserves time alarms. Locations require coordinates and enabled Location Services to fire; ask for personal locations, never guess them.
+- Use `--url` for the native URL field. Flags/tags use private APIs and can warn on partial failure. Title hashtags are additive; numeric `#42` is ignored.
+- Prefer `--priority high|medium|low|none`. `-F` means flagged, `-f` force on deletion/shared moves, `-f` format on export, `-O` export output file, `-t` title on update and tags on add.
+- Mutation confirmation remains required. Do not overwrite externally managed skills with `rem skills install`; use its dry-run to preview.
 
-## Short IDs
-
-rem displays the first 8 characters of each reminder's UUID as its "short ID" (e.g. `AB12CD34`). You can pass any unique prefix to commands — `rem complete AB1` works as long as it matches exactly one reminder. Prefer short IDs when showing reminder IDs back to the user.
-
-## Notifications default to ON
-
-When `--due` is set on `rem add`, rem auto-attaches an alarm at the due time. This matches Apple Reminders.app behavior. **Do NOT pass `--remind-me 0m` to enable notifications — that's already the default when `--due` is set.**
-
-- `rem add "Review PR" --due tomorrow` → notifies at tomorrow 9 AM (default due time)
-- `rem add "Review PR" --due "tomorrow 2pm" --remind-me 15m` → notifies 15 minutes before
-- `rem add "Groceries" --due tomorrow --silent` → due date, no notification (checklist-style)
-
-Full detail: [references/commands.md](references/commands.md) `rem add` section.
-
-## Location reminders take coordinates, not addresses
-
-`--location "lat,lng"` attaches a geofence trigger that fires on **arrival by default**; add `--on-leave` for departure, `--radius <meters>` to widen the fence (0 = system minimum). rem does NO geocoding — you must supply decimal coordinates:
-
-- Well-known places (landmarks, chains' flagship stores, cities): use coordinates you know.
-- Personal places ("the office", "mom's house", "my gym"): **ask the user** for the address or coordinates — never guess.
-
-```bash
-rem add "Buy milk" --location "37.3318,-122.0312" --radius 200          # on arrival
-rem update AB12 --location "37.7749,-122.4194" --on-leave               # on departure
-rem update AB12 --location none                                         # remove geofence only
-```
-
-A reminder can have both a due date and a location. `--remind-me` and `--location` manage separate alarm buckets — clearing one never touches the other.
-
-## URLs go in the native Reminders.app URL field
-
-When the user wants a link attached to a reminder, pass it via `--url`. rem writes to the real Reminders.app URL field (not the notes body), so the link shows in the Reminders.app UI with Apple's native link card rendering. Clear a URL with `--url ""`.
-
-```bash
-rem add "Review spec" --due friday --url https://example.com/spec.pdf
-rem update AB12 --url https://github.com/org/repo/pull/42
-rem update AB12 --url ""    # clear
-```
-
-## Critical gotchas
-
-1. **macOS only.** rem uses EventKit via cgo. Will fail on Linux — detect OS first if you're unsure.
-2. **Priority uses word forms, not raw numbers.** Pass `--priority high|medium|low|none`. rem does accept raw ints, but Apple's 1–9 scale is inverted (1 = highest, 9 = lowest), so the words are safer when relaying from user input.
-3. **`--due none` clears** the due date in `rem update`. Same for `--remind-me none` and `--repeat none`.
-4. **Flagged and tags use private API.** Both go through Apple's private ReminderKit framework since EventKit doesn't expose these properties. Sub-200ms like everything else, but may break on future macOS versions. Both degrade gracefully — if the private API is unavailable, the reminder is still created/updated (just without the flag/tags) and a warning is printed on stderr. This applies to `flag`/`unflag` too, which behave exactly like `update --flagged`.
-5. **Tags from title are additive.** `#hashtags` in the title are parsed and stored as native Reminders.app tags. They stay in the title text AND become tag objects. Pure numbers like `#42` are ignored (treated as issue references, not tags).
-6. **`rem delete` prompts by default.** Pass `--force` / `--yes` / `-f` / `-y` when scripting to skip the confirmation.
-7. **`rem add -i` (interactive form) has no `--silent` equivalent.** If a user wants a silent reminder via the interactive flow, create it then clear the alarm in the same Bash call: `id=$(rem add "Task" --due tomorrow -o json | jq -r '.id'); rem update "$id" --remind-me none`.
-8. **Location alarms save even without Location Services, but never fire.** rem writes the geofence via public EventKit regardless; the notification only fires if Location Services is enabled for Reminders on the device watching the fence (usually the user's iPhone). If a user reports a location reminder "not working", that's the first thing to check — not rem.
-9. **Old reminders with URLs in the notes body** (`URL: https://...`) still read correctly as a backward-compat fallback. New reminders always use the native URL field.
-10. **Moving to/from a shared list changes the reminder's ID — and rem prompts before doing it.** macOS has no true move across a shared-list boundary, so rem copies the reminder (all fields preserved, including completed state) and deletes the original. Without `-y`, `rem update --list` blocks on a confirmation you cannot answer (TTY prompt; non-TTY it errors). Procedure for a move involving a shared list:
-   1. Detect: `rem lists -o json | jq -r '.[] | select(.IsShared) | .Name'` — if neither source nor target list is in that output, move normally, no flag needed.
-   2. If one is shared: tell the user the reminder will be recreated with a new ID and confirm with them — do NOT silently pass `-y`; the prompt exists to protect their data on a list other people see.
-   3. Run with the flag once confirmed: `rem update <id> --list "Shared List" -f`.
-   4. Re-resolve the ID: the old short ID is dead. Find the new one with `rem list --list "Shared List" -o json` (the stderr warning also prints it).
-
-## Reference files (load when needed)
-
-- **[references/commands.md](references/commands.md)** — Complete flag reference for every rem command. Load when you need specific flag details, default values, or full usage examples.
-- **[references/dates.md](references/dates.md)** — Natural language date grammar accepted by `--due`, `--due-before`, `--due-after`, and `--remind-me`. Load when constructing a date string from a user's phrasing.
-
-## Common patterns
-
-### Daily briefing — one tool call, not three
-```bash
-echo "== OVERDUE =="; rem overdue -o plain; echo "== TODAY =="; rem today -o plain; echo "== NEXT 3 DAYS =="; rem upcoming --days 3 -o plain
-```
-
-Chain with plain `;` (no `{ }` subshell grouping, no `$(...)` substitution) — permission allowlists check each `;`-separated segment, and `rem`/`echo` are pre-approved by this skill.
-
-### Scripted cleanup
-```bash
-# Archive completed Work items to a JSON backup
-rem export --list Work --format json --output-file work-$(date +%Y%m%d).json
-
-# Count overdue items
-rem overdue -o json | jq 'length'
-```
-
-### Quick capture from a user message
-When the user says something like "remind me to call mom tomorrow at 5pm", parse the title, due date, and list (if mentioned) and run a single `rem add`:
-
-```bash
-rem add "Call mom" --due "tomorrow at 5pm" --list Personal
-```
-
-Always confirm the short ID of the created reminder back to the user so they can reference it later.
+Report created short IDs and verified outcomes. Never infer remote synchronization from local success.

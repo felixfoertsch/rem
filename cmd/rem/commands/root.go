@@ -140,7 +140,7 @@ func printUpdateNotice(_ *cobra.Command) {
 	if result != nil && result.HasUpdate {
 		fmt.Fprintln(os.Stderr)
 		yellow.Fprintf(os.Stderr, "A new version of rem is available: %s → %s\n", Version, result.Latest)
-		fmt.Fprintf(os.Stderr, "Update: curl -fsSL https://rem.sidv.dev/install | bash\n")
+		fmt.Fprintf(os.Stderr, "Update: https://github.com/felixfoertsch/rem/blob/main/docs/builds.md\n")
 	}
 	printSkillsStalenessNotice(homeDir)
 }

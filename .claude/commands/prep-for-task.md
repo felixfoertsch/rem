@@ -6,7 +6,7 @@ Launch these exploration subagents **in parallel** to gain comprehensive project
 
 ### Agent 1: Project Overview
 Read these files and summarize the project state:
-- `CLAUDE.md` — architecture, non-negotiables, build/test commands
+- `AGENTS.md` — architecture, non-negotiables, build/test commands
 - `README.md` — public API, features, limitations
 - Auto memory — check `~/.claude/projects/` for a directory matching the current working directory (the folder name is the absolute path with `/` replaced by `-`). Read `memory/MEMORY.md` inside it for accumulated patterns and gotchas.
 - `go.mod` — module name and Go version
@@ -47,7 +47,7 @@ Summarize your findings to the user in this format:
 ```
 
 ## Rules
-- **ALWAYS read `CLAUDE.md` yourself (not via subagent) before launching any agents** — it contains critical project context, hosting info, and conventions that you must internalize directly
+- **ALWAYS read `AGENTS.md` yourself (not via subagent) before launching any agents** — it contains critical project context, hosting info, and conventions that you must internalize directly
 - Use subagents for ALL exploration — maximize parallelism
 - Do NOT write or modify any files during prep
 - Do NOT start implementation until the user gives you a task

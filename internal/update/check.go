@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	githubRepo   = "BRO3886/rem"
+	githubRepo   = "felixfoertsch/rem"
 	cacheTTL     = 24 * time.Hour
 	checkTimeout = 2 * time.Second
 )
