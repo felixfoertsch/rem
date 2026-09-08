@@ -21,19 +21,26 @@ var (
 	listSvc     *service.ListService
 )
 
-// updateResultCh receives the background update check result (if any).
-var updateResultCh = make(chan *update.Result, 1)
-
-func init() {
+// initializeServices is deliberately lazy: help, skills, completions and unit
+// tests must never open EventKit or trigger a macOS permission prompt.
+// The function variable also provides a seam for permission regression tests.
+var initializeServices = func() error {
+	if reminderSvc != nil && listSvc != nil {
+		return nil
+	}
 	client, err := reminders.New()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to initialize Reminders access: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to initialize Reminders access: %w\n\nRun rem from Terminal.app and allow Reminders access when prompted. Check System Settings > Privacy & Security > Reminders for the application launching rem. A grant to one terminal does not necessarily apply to an IDE or agent application. If the host cannot request access, rem cannot grant it on the host's behalf. See docs/troubleshooting.md", err)
 	}
 	exec = service.NewExecutor()
 	reminderSvc = service.NewReminderService(client)
 	listSvc = service.NewListService(client, exec)
+	return nil
 }
+
+// Each invocation owns its channel, including when Execute is called again in
+// tests. A late update check cannot block or poison a subsequent invocation.
+var updateResultCh chan *update.Result
 
 var rootCmd = &cobra.Command{
 	Use:   "rem",
@@ -43,28 +50,53 @@ It provides full CRUD operations for reminders and lists, natural language date 
 import/export capabilities, and a clean terminal UI.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		switch outputFormat {
+		case "table", "json", "plain":
+		default:
+			return fmt.Errorf("invalid output format %q: use table, json, or plain", outputFormat)
+		}
 		if noColor || os.Getenv("NO_COLOR") != "" {
 			color.NoColor = true
 		}
+		if commandNeedsReminders(cmd) {
+			if err := initializeServices(); err != nil {
+				return err
+			}
+		}
 
-		// Start background update check
+		ch := make(chan *update.Result, 1)
+		updateResultCh = ch
 		if shouldCheckForUpdate(cmd) {
 			go func() {
 				homeDir, err := os.UserHomeDir()
 				if err != nil {
-					updateResultCh <- nil
+					ch <- nil
 					return
 				}
-				updateResultCh <- update.Check(homeDir, Version)
+				ch <- update.Check(homeDir, Version)
 			}()
-		} else {
-			updateResultCh <- nil
 		}
+		return nil
 	},
 	PersistentPostRun: func(cmd *cobra.Command, args []string) {
-		printUpdateNotice(cmd)
+		if commandNeedsReminders(cmd) {
+			printUpdateNotice(cmd)
+		}
 	},
+}
+
+// Check ancestors as well: "skills status" and "completion bash" must be as
+// permission-free as their parent commands. Cobra's hidden completion commands
+// also run without touching the database.
+func commandNeedsReminders(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		switch c.Name() {
+		case "version", "help", "skills", "completion", "__complete", "__completeNoDesc", "doctor":
+			return false
+		}
+	}
+	return true
 }
 
 func init() {
@@ -77,75 +109,41 @@ func Execute() error {
 	return rootCmd.Execute()
 }
 
-// shouldCheckForUpdate returns false for commands/contexts where the check should be skipped.
 func shouldCheckForUpdate(cmd *cobra.Command) bool {
-	// Skip if env var set
-	if os.Getenv("REM_NO_UPDATE_CHECK") != "" {
+	if !commandNeedsReminders(cmd) || os.Getenv("REM_NO_UPDATE_CHECK") != "" {
 		return false
 	}
-
-	// Skip for dev builds
-	if Version == "" || Version == "dev" {
+	if Version == "" || Version == "dev" || outputFormat == "json" {
 		return false
 	}
-
-	// Skip for meta commands
-	name := cmd.Name()
-	if name == "version" || name == "completion" || name == "skills" {
-		return false
-	}
-
-	// Skip if --output json (scripting context)
-	if outputFormat == "json" {
-		return false
-	}
-
-	// Skip if stdout is not a TTY (piped output)
 	fi, err := os.Stdout.Stat()
-	if err != nil {
-		return false
-	}
-	if fi.Mode()&os.ModeCharDevice == 0 {
-		return false
-	}
-
-	return true
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
 }
 
 // printUpdateNotice prints update and skills staleness notices to stderr.
 func printUpdateNotice(_ *cobra.Command) {
-	// Collect update result (non-blocking — if goroutine isn't done, skip)
 	var result *update.Result
 	select {
 	case result = <-updateResultCh:
 	default:
-		// Goroutine still running, don't wait
-		result = nil
 	}
-
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return
 	}
-
 	yellow := color.New(color.FgYellow)
-
 	if result != nil && result.HasUpdate {
 		fmt.Fprintln(os.Stderr)
 		yellow.Fprintf(os.Stderr, "A new version of rem is available: %s → %s\n", Version, result.Latest)
 		fmt.Fprintf(os.Stderr, "Update: curl -fsSL https://rem.sidv.dev/install | bash\n")
 	}
-
-	// Check skills staleness (local only, no HTTP)
 	printSkillsStalenessNotice(homeDir)
 }
 
-// printSkillsStalenessNotice checks if installed skills are outdated.
 func printSkillsStalenessNotice(homeDir string) {
 	if Version == "" || Version == "dev" {
 		return
 	}
-
 	targets := skills.InstalledTargets(skills.DefaultTargets(homeDir))
 	for _, t := range targets {
 		installed := skills.InstalledVersion(t)
@@ -153,7 +151,7 @@ func printSkillsStalenessNotice(homeDir string) {
 			yellow := color.New(color.FgYellow)
 			fmt.Fprintln(os.Stderr)
 			yellow.Fprintf(os.Stderr, "Installed skills are outdated (%s). Run: rem skills install\n", installed)
-			return // Only show once
+			return
 		}
 	}
 }
