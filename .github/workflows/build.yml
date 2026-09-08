@@ -78,7 +78,7 @@ jobs:
             chmod 755 "$stage/rem"
             native_arch=arm64
             if [ "$arch" = amd64 ]; then native_arch=x86_64; fi
-            lipo -verify_arch "$native_arch" "$stage/rem"
+            lipo "$stage/rem" -verify_arch "$native_arch"
             if [ "$arch" = "$(go env GOHOSTARCH)" ]; then
               "$stage/rem" version | grep -F "$sha"
             fi
@@ -111,6 +111,7 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 90
+          overwrite: true # Permit re-running a job for the same commit/run.
       - name: Link downloads in the run summary
         if: steps.artifact.outputs.artifact-url != ''
         env:
