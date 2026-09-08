@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/BRO3886/go-eventkit"
+	"github.com/felixfoertsch/rem/go-eventkit"
 )
 
 // These tests use a mock bridge layer to test the JSON round-trip,

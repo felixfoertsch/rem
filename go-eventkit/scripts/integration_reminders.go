@@ -12,8 +12,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/BRO3886/go-eventkit"
-	"github.com/BRO3886/go-eventkit/reminders"
+	"github.com/felixfoertsch/rem/go-eventkit"
+	"github.com/felixfoertsch/rem/go-eventkit/reminders"
 )
 
 func main() {
@@ -275,7 +275,7 @@ func main() {
 		}
 
 		// Update the URL to a new value and verify it replaces cleanly.
-		newURL := "https://github.com/BRO3886/rem"
+		newURL := "https://github.com/felixfoertsch/rem"
 		_, uerr := client.UpdateReminder(urlReminderID, reminders.UpdateReminderInput{URL: &newURL})
 		if uerr != nil {
 			log.Printf("FAIL: UpdateReminder with new URL: %v", uerr)

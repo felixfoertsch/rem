@@ -20,7 +20,7 @@ macOS Reminders CLI with native assignment, list sections, natural language date
 - **Location reminders** — geofence triggers via `--location "lat,lng"`, fire on arrival or departure
 - **Shared list support** — full CRUD on shared lists, sharing state in `rem lists`, and moves across the shared-list boundary via copy (macOS has no true move there)
 - **Import/Export** — JSON and CSV with tags and location triggers; JSON exports assignment metadata, but imports do not replay list-scoped assignments
-- **Powered by [go-eventkit](https://github.com/BRO3886/go-eventkit)** — use the same library directly for programmatic Go access
+- **Powered by [go-eventkit](go-eventkit/README.md)** — use the same library directly for programmatic Go access
 - **Shell completions** — bash, zsh, fish
 
 ## Installation
@@ -42,13 +42,13 @@ make build
 ./bin/rem version
 ```
 
-Binary: `bin/rem`. The Go module retains its upstream import path for compatibility; build this checkout rather than installing the upstream module remotely.
+Binary: `bin/rem`. Both Go modules are maintained here; build this checkout to include the local library.
 
 ## Bundled EventKit library
 
-`go-eventkit/` contains upstream `v0.13.0` as a self-contained Go module, including its MIT license and tests. Root `go.mod` resolves `github.com/BRO3886/go-eventkit` locally; normal clones include everything without submodule setup. See [source provenance and update procedure](go-eventkit/UPSTREAM.md).
+`go-eventkit/` is maintained here as a self-contained Go module, including its MIT license and tests. Root `go.mod` resolves `github.com/felixfoertsch/rem/go-eventkit` locally; normal clones include everything without submodule setup. No upstream compatibility or synchronization requirement applies. See [source provenance](go-eventkit/UPSTREAM.md).
 
-`make test` and `make lint` check both modules. To work on the library alone, run Go commands from `go-eventkit/`. Root `go test ./...` does not traverse nested modules. Assignment code remains in `internal/reminderkit/` for now.
+`make test` and `make lint` check both modules. To work on the library alone, run Go commands from `go-eventkit/`. Root `go test ./...` does not traverse nested modules. Native collaboration lives in `go-eventkit/reminderkit/`; `internal/reminderkit/` only resolves CLI participant selectors and orchestrates assignment.
 
 ## Requirements
 
@@ -233,7 +233,7 @@ rem completion fish > ~/.config/fish/completions/rem.fish
 
 ## Date Parsing
 
-Date parsing is powered by [`go-eventkit/dateparser`](https://github.com/BRO3886/go-eventkit):
+Date parsing is powered by [`go-eventkit/dateparser`](go-eventkit/README.md):
 
 | Input | Meaning |
 |-------|---------|
@@ -258,11 +258,9 @@ Date parsing is powered by [`go-eventkit/dateparser`](https://github.com/BRO3886
 
 ## Go API
 
-rem is powered by [**go-eventkit**](https://github.com/BRO3886/go-eventkit) — use it directly for programmatic access to macOS Reminders in your own Go programs:
+rem is powered by [**go-eventkit**](go-eventkit/README.md) — use it directly for programmatic access to macOS Reminders in your own Go programs:
 
-```bash
-go get github.com/BRO3886/go-eventkit
-```
+The library is part of this checkout and uses its own module. External local consumers can use a `replace` directive pointing to this checkout's `go-eventkit/` directory; no separate library release is published.
 
 ```go
 package main
@@ -271,7 +269,7 @@ import (
     "fmt"
     "time"
 
-    "github.com/BRO3886/go-eventkit/reminders"
+    "github.com/felixfoertsch/rem/go-eventkit/reminders"
 )
 
 func main() {
@@ -313,7 +311,7 @@ func main() {
 }
 ```
 
-See the [go-eventkit README](https://github.com/BRO3886/go-eventkit) for the full API reference.
+See the [go-eventkit README](go-eventkit/README.md) for the full API reference.
 
 ## Architecture
 
@@ -336,7 +334,7 @@ rem/
 └── README.md
 ```
 
-**Core reads and writes** — including reminder CRUD and list CRUD — go through `go-eventkit` (`github.com/BRO3886/go-eventkit`) — an Objective-C EventKit bridge compiled into the binary via cgo. Direct in-process access to the Reminders store, no IPC. Assignments, participants, sections, and diagnostics use the fork's `internal/reminderkit` extension. Runtime latency depends on the host and account.
+**Core reads and writes** — including reminder CRUD and list CRUD — go through `go-eventkit` (`github.com/felixfoertsch/rem/go-eventkit`) — an Objective-C EventKit bridge compiled into the binary via cgo. Direct in-process access to the Reminders store, no IPC. Assignments, participants, sections, and diagnostics use the bundled library's `go-eventkit/reminderkit` package. Runtime latency depends on the host and account.
 
 **Flagged, tag, and list-sharing operations** use the private ReminderKit bridge in go-eventkit — EventKit doesn't expose these properties, but `REMReminder.flagged`, `REMReminder.hashtags`, and `REMList.isShared` do. Tags degrade gracefully if the private API becomes unavailable. AppleScript is only used for the default list name query.
 

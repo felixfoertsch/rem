@@ -1,7 +1,7 @@
 // Native boundary tests: synthetic objects only; no store or user data.
 // Compile on macOS with Foundation and EventKit. Including the bridge lets us
 // exercise its real guards, not a second test-only implementation of them.
-#import "../internal/reminderkit/bridge_darwin.m"
+#import "../reminderkit/bridge_darwin.m"
 #include <stdio.h>
 
 @interface RemTestReminder : NSObject

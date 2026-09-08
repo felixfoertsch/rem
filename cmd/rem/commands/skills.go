@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	rem "github.com/BRO3886/rem"
-	"github.com/BRO3886/rem/internal/skills"
+	rem "github.com/felixfoertsch/rem"
+	"github.com/felixfoertsch/rem/internal/skills"
 	"github.com/charmbracelet/huh"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"

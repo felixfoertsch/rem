@@ -5,7 +5,7 @@ package service
 import (
 	"testing"
 
-	"github.com/BRO3886/go-eventkit/reminders"
+	"github.com/felixfoertsch/rem/go-eventkit/reminders"
 )
 
 func TestFromEventKitList(t *testing.T) {

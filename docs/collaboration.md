@@ -65,7 +65,7 @@ Listing, creation, and renaming are implemented. **Per-reminder section membersh
 
 ## Architecture and verification limits
 
-Core reminder operations remain in `go-eventkit`. The narrow `internal/reminderkit` extension is an explicit exception to the repository's usual all-capabilities-through-go-eventkit architecture, because the pinned dependency does not expose assignments/sections. It should be extracted into that library once the API and live-account behavior are validated. It follows the existing backing-object/ReminderKit approach; it does not use AppleScript, spawn helper commands, edit SQLite, or bypass macOS privacy controls.
+All native reminder operations live in `go-eventkit`. Its `reminderkit` package owns collaboration types, roster lookup, assignment transactions, sections, diagnostics, and save/readback verification. The CLI's `internal/reminderkit` package only resolves participant text (names, email, `me`) and passes resolved identities to the library. Native code independently revalidates list membership before saving. It follows the existing backing-object/ReminderKit approach; it does not use AppleScript, spawn helper commands, edit SQLite, or bypass macOS privacy controls.
 
 All native operations are serialized. The bridge checks selectors and method signatures, uses KVC for dynamic properties, validates backing-object types, and propagates exceptions/errors. `rem doctor` reads authorization status and selector availability without creating an event store or requesting access. Presence of a selector is not evidence that a particular account supports the operation.
 
@@ -88,7 +88,7 @@ go vet ./...
 mkdir -p bin
 xcrun clang -fobjc-arc -fblocks -fsanitize=address,undefined \
   -framework Foundation -framework EventKit \
-  scripts/reminderkit-tests.m -o bin/reminderkit-tests
+  go-eventkit/scripts/reminderkit-tests.m -o bin/reminderkit-tests
 bin/reminderkit-tests
 ```
 

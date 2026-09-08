@@ -5,7 +5,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/BRO3886/rem/cmd/rem/commands"
+	"github.com/felixfoertsch/rem/cmd/rem/commands"
 )
 
 // Set by ldflags at build time.

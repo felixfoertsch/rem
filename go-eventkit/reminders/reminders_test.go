@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/BRO3886/go-eventkit"
+	"github.com/felixfoertsch/rem/go-eventkit"
 )
 
 // --- Priority Tests ---

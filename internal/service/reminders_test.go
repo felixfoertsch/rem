@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/BRO3886/go-eventkit/reminders"
-	"github.com/BRO3886/rem/internal/reminder"
+	"github.com/felixfoertsch/rem/go-eventkit/reminders"
+	"github.com/felixfoertsch/rem/internal/reminder"
 )
 
 func TestFromEventKitReminder(t *testing.T) {

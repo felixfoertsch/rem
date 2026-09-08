@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/BRO3886/rem/internal/reminder"
+	"github.com/felixfoertsch/rem/internal/reminder"
 )
 
 func sampleReminders() []*reminder.Reminder {

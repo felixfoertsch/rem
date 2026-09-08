@@ -30,7 +30,7 @@ jobs:
       - name: Native boundary tests (synthetic data only)
         run: |
           mkdir -p bin
-          xcrun clang -fobjc-arc -fblocks -fsanitize=address,undefined -framework Foundation -framework EventKit scripts/reminderkit-tests.m -o bin/reminderkit-tests
+          xcrun clang -fobjc-arc -fblocks -fsanitize=address,undefined -framework Foundation -framework EventKit go-eventkit/scripts/reminderkit-tests.m -o bin/reminderkit-tests
           bin/reminderkit-tests
       - name: Unit tests with race detector (no permission prompts)
         run: go test -race ./...

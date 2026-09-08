@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/BRO3886/rem/internal/reminder"
-	"github.com/BRO3886/rem/internal/ui"
+	"github.com/felixfoertsch/rem/internal/reminder"
+	"github.com/felixfoertsch/rem/internal/ui"
 	"github.com/spf13/cobra"
 )
 

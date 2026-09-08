@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/BRO3886/rem/internal/export"
+	"github.com/felixfoertsch/rem/internal/export"
 	"github.com/spf13/cobra"
 )
 

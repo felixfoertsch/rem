@@ -5,8 +5,8 @@ package service
 import (
 	"fmt"
 
-	"github.com/BRO3886/go-eventkit/reminders"
-	"github.com/BRO3886/rem/internal/reminder"
+	"github.com/felixfoertsch/rem/go-eventkit/reminders"
+	"github.com/felixfoertsch/rem/internal/reminder"
 )
 
 // ListService provides operations for reminder lists.

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/BRO3886/go-eventkit"
+	"github.com/felixfoertsch/rem/go-eventkit"
 )
 
 // rawReminder is the intermediate JSON representation from the ObjC bridge.

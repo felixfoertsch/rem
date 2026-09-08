@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/BRO3886/rem/internal/reminder"
-	"github.com/BRO3886/rem/internal/reminderkit"
+	"github.com/felixfoertsch/rem/internal/reminder"
+	"github.com/felixfoertsch/rem/internal/reminderkit"
 	"github.com/spf13/cobra"
 )
 

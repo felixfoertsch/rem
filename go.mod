@@ -1,12 +1,12 @@
-module github.com/BRO3886/rem
+module github.com/felixfoertsch/rem
 
 go 1.24.5
 
 require (
-	github.com/BRO3886/go-eventkit v0.13.0
 	github.com/charmbracelet/huh v0.8.0
 	github.com/charmbracelet/x/term v0.2.1
 	github.com/fatih/color v1.18.0
+	github.com/felixfoertsch/rem/go-eventkit v0.0.0
 	github.com/olekukonko/tablewriter v1.1.3
 	github.com/spf13/cobra v1.10.2
 )
@@ -48,4 +48,4 @@ require (
 	golang.org/x/text v0.23.0 // indirect
 )
 
-replace github.com/BRO3886/go-eventkit => ./go-eventkit
+replace github.com/felixfoertsch/rem/go-eventkit => ./go-eventkit

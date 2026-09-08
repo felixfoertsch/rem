@@ -34,9 +34,9 @@ No AppleScript. No subprocesses. Direct EventKit access via cgo, with an idiomat
 
 ## Installation
 
-```bash
-go get github.com/BRO3886/go-eventkit
-```
+This library is maintained in `go-eventkit/` inside the rem repository, with its own `go.mod`. The parent resolves it locally; no separate download is needed. Run `go test -race ./...` and `go vet ./...` from this directory. See [source provenance](UPSTREAM.md).
+
+Native collaboration APIs live in `reminderkit/`; CLI selectors and formatting remain outside this module.
 
 ## Quick Start
 
@@ -50,8 +50,8 @@ import (
     "log"
     "time"
 
-    "github.com/BRO3886/go-eventkit"
-    "github.com/BRO3886/go-eventkit/calendar"
+    "github.com/felixfoertsch/rem/go-eventkit"
+    "github.com/felixfoertsch/rem/go-eventkit/calendar"
 )
 
 func main() {
@@ -114,7 +114,7 @@ import (
     "log"
     "time"
 
-    "github.com/BRO3886/go-eventkit/reminders"
+    "github.com/felixfoertsch/rem/go-eventkit/reminders"
 )
 
 func main() {
@@ -186,7 +186,7 @@ The channel is buffered (cap 16) and excess signals are coalesced — consumers 
 ### Date Parsing
 
 ```go
-import "github.com/BRO3886/go-eventkit/dateparser"
+import "github.com/felixfoertsch/rem/go-eventkit/dateparser"
 
 // Simple usage (defaults: midnight, no rollover)
 t, err := dateparser.ParseDate("tomorrow 2pm")
@@ -218,7 +218,7 @@ Supports: keywords (`today`, `tomorrow`, `now`, `eod`, `eow`, `this week`, `next
 ### Calendar Package
 
 ```go
-import "github.com/BRO3886/go-eventkit/calendar"
+import "github.com/felixfoertsch/rem/go-eventkit/calendar"
 ```
 
 | Method                                               | Description                       |
@@ -243,7 +243,7 @@ import "github.com/BRO3886/go-eventkit/calendar"
 ### Dateparser Package
 
 ```go
-import "github.com/BRO3886/go-eventkit/dateparser"
+import "github.com/felixfoertsch/rem/go-eventkit/dateparser"
 ```
 
 | Function | Description |
@@ -259,7 +259,7 @@ import "github.com/BRO3886/go-eventkit/dateparser"
 ### Reminders Package
 
 ```go
-import "github.com/BRO3886/go-eventkit/reminders"
+import "github.com/felixfoertsch/rem/go-eventkit/reminders"
 ```
 
 | Method                                         | Description                           |

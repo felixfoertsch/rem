@@ -1,27 +1,28 @@
-// Package reminderkit isolates native capabilities not yet exposed by
-// go-eventkit. It never grants access or modifies the Reminders database
-// directly: all writes go through Apple's REMSaveRequest transaction API.
+// Package reminderkit resolves CLI participant selectors before calling go-eventkit.
+// Native transactions and verification belong to the library.
 package reminderkit
 
 import (
 	"fmt"
 	"strings"
 
-	"github.com/BRO3886/rem/internal/reminder"
+	native "github.com/felixfoertsch/rem/go-eventkit/reminderkit"
+	"github.com/felixfoertsch/rem/internal/reminder"
 )
 
-type Client struct {
-	call func(any, any) error
+type backend interface {
+	Roster(string) (*native.Roster, error)
+	SetAssignment(string, string, string) (*native.Collaboration, error)
+	Participants(string) ([]native.Participant, error)
+	Metadata([]string) (map[string]*native.Collaboration, error)
+	Sections(string) ([]native.Section, error)
+	ChangeSection(string, string, string, string) error
+	Diagnostics() (map[string]any, error)
 }
 
-func New() *Client { return &Client{call: nativeCall} }
+type Client struct{ backend }
 
-// Participants returns existing participants, including the list owner.
-func (c *Client) Participants(list string) ([]reminder.Participant, error) {
-	out := []reminder.Participant{}
-	err := c.call(map[string]any{"op": "participants", "list": list}, &out)
-	return out, err
-}
+func New() *Client { return &Client{backend: native.New()} }
 
 // ResolveParticipant never performs prefix/fuzzy matching on people's names.
 // Exact IDs win; names and email addresses are case-insensitive. "me" requires
@@ -78,13 +79,12 @@ func (c *Client) Assign(id, query string, clear bool) (*reminder.Collaboration, 
 	if clear == (strings.TrimSpace(query) != "") {
 		return nil, fmt.Errorf("provide a participant or --none, not both")
 	}
-	var roster struct {
-		People     []reminder.Participant `json:"people"`
-		ListID     string                 `json:"list_id"`
-		ReminderID string                 `json:"reminder_id"`
-	}
-	if err := c.call(map[string]any{"op": "roster", "id": id}, &roster); err != nil {
+	roster, err := c.Roster(id)
+	if err != nil {
 		return nil, err
+	}
+	if roster == nil || roster.ListID == "" || roster.ReminderID == "" {
+		return nil, fmt.Errorf("native roster has no resolved reminder/list ID; refusing to write")
 	}
 	participantID := ""
 	if !clear {
@@ -94,67 +94,5 @@ func (c *Client) Assign(id, query string, clear bool) (*reminder.Collaboration, 
 		}
 		participantID = p.ID
 	}
-	var out reminder.Collaboration
-	if roster.ListID == "" || roster.ReminderID == "" {
-		return nil, fmt.Errorf("native roster has no resolved reminder/list ID; refusing to write")
-	}
-	err := c.call(map[string]any{"op": "assign", "id": roster.ReminderID, "list_id": roster.ListID, "participant_id": participantID, "clear": clear}, &out)
-	if err != nil {
-		return nil, err
-	}
-	if !out.AssignmentAvailable || (clear && out.AssignedTo != nil) || (!clear && (out.AssignedTo == nil || !strings.EqualFold(out.AssignedTo.ID, participantID))) {
-		return nil, fmt.Errorf("assignment operation returned an unverified result; inspect Reminders before retrying")
-	}
-	return &out, nil
-}
-
-func (c *Client) Metadata(ids []string) (map[string]*reminder.Collaboration, error) {
-	out := make(map[string]*reminder.Collaboration)
-	if len(ids) == 0 {
-		return out, nil
-	}
-	err := c.call(map[string]any{"op": "metadata", "ids": ids}, &out)
-	return out, err
-}
-
-func (c *Client) Sections(list string) ([]reminder.Section, error) {
-	out := []reminder.Section{}
-	err := c.call(map[string]any{"op": "sections", "list": list}, &out)
-	return out, err
-}
-
-func (c *Client) ChangeSection(op, list, name, newName string) error {
-	switch op {
-	case "section-create", "section-rename":
-	default:
-		return fmt.Errorf("invalid section operation %q", op)
-	}
-	if strings.TrimSpace(list) == "" || strings.TrimSpace(name) == "" {
-		return fmt.Errorf("list and section are required")
-	}
-	if op == "section-rename" && strings.TrimSpace(newName) == "" {
-		return fmt.Errorf("new section name is required")
-	}
-	var out reminder.Section
-	if err := c.call(map[string]any{"op": op, "list": list, "name": name, "new_name": newName}, &out); err != nil {
-		return err
-	}
-	want := newName
-	if op == "section-create" {
-		want = name
-	}
-	if out.ID == "" || out.Name != want {
-		return fmt.Errorf("section result could not be verified; inspect Reminders before retrying")
-	}
-	return nil
-}
-
-// Diagnostics does not instantiate an EventKit/REMStore or request permission.
-func (c *Client) Diagnostics() (map[string]any, error) {
-	out := make(map[string]any)
-	err := c.call(map[string]any{"op": "diagnostics"}, &out)
-	if err == nil && out == nil {
-		err = fmt.Errorf("native diagnostics returned no result")
-	}
-	return out, err
+	return c.SetAssignment(roster.ReminderID, roster.ListID, participantID)
 }

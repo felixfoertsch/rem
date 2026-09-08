@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/BRO3886/go-eventkit/dateparser"
-	"github.com/BRO3886/rem/internal/reminder"
+	"github.com/felixfoertsch/rem/go-eventkit/dateparser"
+	"github.com/felixfoertsch/rem/internal/reminder"
 )
 
 // parseDate wraps dateparser.ParseDate with rem's default options:

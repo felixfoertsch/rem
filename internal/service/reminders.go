@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	eventkit "github.com/BRO3886/go-eventkit"
-	"github.com/BRO3886/go-eventkit/reminders"
-	"github.com/BRO3886/rem/internal/reminder"
-	"github.com/BRO3886/rem/internal/reminderkit"
+	eventkit "github.com/felixfoertsch/rem/go-eventkit"
+	"github.com/felixfoertsch/rem/go-eventkit/reminders"
+	"github.com/felixfoertsch/rem/internal/reminder"
+	"github.com/felixfoertsch/rem/internal/reminderkit"
 )
 
 // ReminderService provides operations for reminders using go-eventkit for

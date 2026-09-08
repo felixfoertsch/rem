@@ -3,7 +3,8 @@
 ## Scope and ownership
 
 - This repository is `felixfoertsch/rem`, a fork of `BRO3886/rem`. Preserve upstream attribution and the MIT license.
-- The Go module remains `github.com/BRO3886/rem` for import compatibility. Do not rename it as a branding change. `BRO3886/go-eventkit` is bundled as an independently buildable module in `go-eventkit/`, selected by the root local `replace`. Preserve its license, module path, and provenance in `go-eventkit/UPSTREAM.md`.
+- Both modules are maintained here: `github.com/felixfoertsch/rem` and `github.com/felixfoertsch/rem/go-eventkit`. The library builds independently in `go-eventkit/`, selected by the root local `replace`; `v0.0.0` is a local dependency placeholder, not a release. No upstream compatibility or synchronization requirement applies. Preserve MIT notices and source provenance in `go-eventkit/UPSTREAM.md`.
+- Use neutral names (`rem`, `go-eventkit`, `reminderkit`) in APIs, commands, and prose. Repository-owner names belong only in canonical module/import paths, repository URLs, and attribution.
 - `AGENTS.md` is the sole repository instruction file. Documentation lives in `README.md`, `docs/`, and `skills/rem-cli/`; no hosted website or external installer is maintained here.
 - Keep patches small, follow existing Go conventions, and preserve unrelated work. Commit messages use Conventional Commits: `type(scope): description`.
 - Do not push, tag, publish releases, or change repository hosting settings without explicit authorization.
@@ -12,7 +13,8 @@
 
 - `cmd/rem/commands/`: Cobra commands; shared interactive helpers in `huh_helpers.go` and batch mutations in `batch.go`.
 - `internal/service/`: core reminder/list operations via `go-eventkit`; AppleScript is limited to the default-list name query.
-- `internal/reminderkit/`: guarded in-process Objective-C/cgo extension for assignments, participants, sections, and diagnostics. This is the deliberate exception to the usual go-eventkit boundary.
+- `go-eventkit/reminderkit/`: native collaboration types, guarded Objective-C/cgo transactions, participants, sections, diagnostics, and save/readback verification.
+- `internal/reminderkit/`: CLI participant selectors and assignment orchestration only; no native code or serialized bridge protocol.
 - `internal/reminder/`: domain models and collaboration metadata; `internal/export/`: JSON/CSV; `internal/ui/`: terminal formatting.
 - `internal/skills/` and root `skills.go`: embedded skill installation/status; `skills/rem-cli/` is the distributable instruction source.
 - `internal/update/`: best-effort release notices, not an artifact installer. Keep notices scoped to this fork.
@@ -71,4 +73,4 @@ python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
 - Keep artifact names commit-specific, include checksums/build metadata, and preserve independent runs. Retention is 90 days; artifacts are not permanent releases.
 - CI snapshots report `main-<short-sha>` plus the full commit. They are not Developer ID signed or notarized. Do not claim signing or hosting that has not been configured.
 - Release/tag creation stays manual. For an authorized release: test first, push main, create/push the version tag, build with `make release`, verify archive architecture and embedded version, then explicitly publish to `felixfoertsch/rem`.
-- Never relabel a main artifact as a tagged release. Preserve the existing version scheme and linear history. See `docs/builds.md` for download and validation details.
+- Never relabel a main artifact as a tagged release. Use CalVer for future binary releases, retain `main-<short-sha>` for artifacts, and keep linear history. The locally replaced library needs no separate release tags. See `docs/builds.md` for download and validation details.

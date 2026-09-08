@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/BRO3886/rem/internal/export"
-	"github.com/BRO3886/rem/internal/reminder"
+	"github.com/felixfoertsch/rem/internal/export"
+	"github.com/felixfoertsch/rem/internal/reminder"
 	"github.com/charmbracelet/x/term"
 	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"

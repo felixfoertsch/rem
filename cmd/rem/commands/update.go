@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/BRO3886/rem/internal/reminder"
+	"github.com/felixfoertsch/rem/internal/reminder"
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 )

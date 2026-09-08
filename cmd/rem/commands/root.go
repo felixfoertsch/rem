@@ -5,10 +5,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/BRO3886/go-eventkit/reminders"
-	"github.com/BRO3886/rem/internal/service"
-	"github.com/BRO3886/rem/internal/skills"
-	"github.com/BRO3886/rem/internal/update"
+	"github.com/felixfoertsch/rem/go-eventkit/reminders"
+	"github.com/felixfoertsch/rem/internal/service"
+	"github.com/felixfoertsch/rem/internal/skills"
+	"github.com/felixfoertsch/rem/internal/update"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
