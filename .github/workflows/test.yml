@@ -27,6 +27,20 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Private API capability probe (no user data)
+        run: |
+          mkdir -p bin
+          xcrun clang -fobjc-arc -framework Foundation scripts/reminderkit-probe.m -o bin/reminderkit-probe
+          bin/reminderkit-probe
+      - name: Reproducible source bundle with dependencies
+        run: |
+          go mod vendor
+          tar -czf "$RUNNER_TEMP/rem-source.tar.gz" go.mod go.sum Makefile LICENSE cmd internal skills vendor scripts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rem-source
+          path: ${{ runner.temp }}/rem-source.tar.gz
+          retention-days: 1
       - name: Unit tests (no permission prompts)
         run: go test -race ./...
       - name: Build
