@@ -38,9 +38,11 @@ and checksums before upload. The Intel build is cross-compiled with cgo/clang;
 its architecture is checked, but it is not runtime-tested on an Intel Mac.
 
 These are development snapshots, **not Developer ID-signed or notarized releases**.
-macOS Gatekeeper and Reminders permission requirements still apply. Shared-list
-assignment writes still require `--experimental`; producing binaries does not
-replace the live-account acceptance checklist in [collaboration.md](collaboration.md).
+macOS Gatekeeper and Reminders permission requirements still apply. This fork's
+`main` is experimental by definition: assignment and section writes are enabled
+by default, without an extra opt-in flag. Producing binaries does not replace the
+live-account acceptance checklist in [collaboration.md](collaboration.md) before
+a validated manual release.
 The upstream Homebrew/install-script instructions install upstream releases, not
 these development snapshots.
 

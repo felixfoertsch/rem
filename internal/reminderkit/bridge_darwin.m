@@ -333,8 +333,8 @@ static id handle(NSDictionary *request) {
     invoke(context,@"removeAllAssignments",@[]);
     if (!clear) {
         // Status 0 is provisional: synthetic native storage accepts it, but
-        // that does not establish app notification/sync semantics. CLI writes
-        // require --experimental until a real shared-account test verifies it.
+        // that does not establish app notification/sync semantics. Main enables
+        // these writes by default; validate against a real account before release.
         invoke(context,@"addAssignmentWithAssigneeID:originatorID:status:",@[target[@"_object_id"],me[@"_object_id"],@0]);
         if (!equalText(objectIDString(get(get(context,@"currentAssignment"),@"assigneeID")),targetID))
             fail(@"Native assignment state was not accepted; nothing saved");

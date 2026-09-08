@@ -25,12 +25,12 @@ func writeCollaborationJSON(cmd *cobra.Command, value any) error {
 }
 
 func newAssignCommand(client collaborationBackend) *cobra.Command {
-	var none, experimental bool
+	var none bool
 	cmd := &cobra.Command{
 		Use:     "assign <id> [participant]",
 		Short:   "Assign a shared reminder to an existing list participant",
 		Long:    "Assign by exact participant ID, email, name, or 'me'. Duplicate names are rejected.\nUses private ReminderKit APIs: validate on a disposable shared reminder first.\nThis never invites people, changes sharing permissions, or modifies other reminder fields.",
-		Example: "  rem participants --list Family\n  rem assign abc12345 person@example.com --experimental\n  rem assign abc12345 --none --experimental",
+		Example: "  rem participants --list Family\n  rem assign abc12345 person@example.com\n  rem assign abc12345 --none",
 		Args: func(cmd *cobra.Command, args []string) error {
 			if err := cobra.RangeArgs(1, 2)(cmd, args); err != nil {
 				return err
@@ -40,9 +40,6 @@ func newAssignCommand(client collaborationBackend) *cobra.Command {
 			}
 			if (none && len(args) != 1) || (!none && (len(args) != 2 || strings.TrimSpace(args[1]) == "")) {
 				return fmt.Errorf("provide a participant or --none, not both")
-			}
-			if !experimental {
-				return fmt.Errorf("native assignment writes require --experimental; test a disposable shared reminder first (see docs/collaboration.md)")
 			}
 			return nil
 		},
@@ -70,7 +67,6 @@ func newAssignCommand(client collaborationBackend) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&none, "none", false, "Remove the current assignment")
-	cmd.Flags().BoolVar(&experimental, "experimental", false, "Allow native writes pending shared-account validation")
 	return cmd
 }
 
@@ -131,13 +127,11 @@ func newSectionsCommand(client collaborationBackend) *cobra.Command {
 
 func newSectionCommand(client collaborationBackend) *cobra.Command {
 	var list string
-	var experimental bool
 	parent := &cobra.Command{
 		Use: "section", Short: "Create or rename native list sections",
 		Long: "Create and rename sections. Moving reminders, filtering by section, and deleting\nsections are not implemented; those require preserving native membership ordering.",
 	}
 	parent.PersistentFlags().StringVarP(&list, "list", "l", "", "Exact list name or ID (required)")
-	parent.PersistentFlags().BoolVar(&experimental, "experimental", false, "Allow native writes pending live-account validation")
 	_ = parent.MarkPersistentFlagRequired("list")
 	for _, operation := range []string{"create", "rename"} {
 		op := operation
@@ -149,15 +143,7 @@ func newSectionCommand(client collaborationBackend) *cobra.Command {
 		}
 		parent.AddCommand(&cobra.Command{
 			Use: use, Short: op + " a section",
-			Args: func(cmd *cobra.Command, args []string) error {
-				if err := cobra.ExactArgs(n)(cmd, args); err != nil {
-					return err
-				}
-				if !experimental {
-					return fmt.Errorf("native section writes require --experimental; validate on a disposable list first")
-				}
-				return nil
-			},
+			Args: cobra.ExactArgs(n),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				newName := ""
 				if op == "rename" {

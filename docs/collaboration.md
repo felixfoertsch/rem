@@ -1,6 +1,6 @@
 # Shared-reminder assignments and sections (experimental)
 
-This branch adds a native collaboration bridge, CLI commands, and assignment display. It is not a claim that all upstream issues are solved. New **write commands require `--experimental`** until live-account validation is complete. Read-only metadata and `doctor` do not require this flag.
+This fork's **`main` branch is experimental by definition**. Assignment and section commands are enabled by default, with no extra opt-in flag. The native collaboration bridge, CLI commands, and assignment display are available for development use; this is not a claim that all upstream issues or live-account validation are complete. Permission checks, identity validation, and save/readback verification remain enforced. Releases are manual.
 
 ## Build and try
 
@@ -8,7 +8,7 @@ On macOS with Go (the version in `go.mod`) and Xcode Command Line Tools:
 
 ```sh
 git fetch origin
-git switch feat/shared-reminders-and-upstream-fixes
+git switch main
 go build -o bin/rem ./cmd/rem
 bin/rem doctor
 bin/rem participants --list "Family" --output json
@@ -18,10 +18,10 @@ bin/rem list --list "Family" --output json
 Substitute an actual list name or its exact ID. Use a disposable reminder in a test shared list for writes, not a production task:
 
 ```sh
-bin/rem assign REMINDER_ID existing-participant@example.com --experimental
-bin/rem assign REMINDER_ID me --experimental
+bin/rem assign REMINDER_ID existing-participant@example.com
+bin/rem assign REMINDER_ID me
 bin/rem show REMINDER_ID --output json
-bin/rem assign REMINDER_ID --none --experimental
+bin/rem assign REMINDER_ID --none
 ```
 
 These are separate operations, not a script to run blindly. Inspect the result in Reminders.app and on the other participant's device after each write. `me` requires a positively resolved native current-user identity. An unresolved or ambiguous identity fails before saving; the implementation never guesses from the shell username or a matching contact name.
@@ -57,8 +57,8 @@ JSON import intentionally does not replay collaboration metadata: participant ID
 
 ```sh
 bin/rem sections --list "Family" --output json
-bin/rem section create "Planning" --list "Family" --experimental
-bin/rem section rename "Planning" "Next" --list "Family" --experimental
+bin/rem section create "Planning" --list "Family"
+bin/rem section rename "Planning" "Next" --list "Family"
 ```
 
 Listing, creation, and renaming are implemented. **Per-reminder section membership, `update --section`, filtering by section, and section deletion are not implemented.** The available native change context exposes unsaved membership/order structures; treating those as the complete persisted membership would risk overwriting list organization. No fabricated `section` JSON field or ineffective move/delete flag is provided.
@@ -71,14 +71,14 @@ All native operations are serialized. The bridge checks selectors and method sig
 
 Important remaining validation:
 
-- The assignment status argument is provisionally `0`. Synthetic native storage accepts it, but the same experiment accepts other statuses too. The semantic value used by Reminders.app, notification behavior, and cloud propagation must be checked against a real assignment before removing the experimental gate.
+- The assignment status argument is provisionally `0`. Synthetic native storage accepts it, but the same experiment accepts other statuses too. The semantic value used by Reminders.app, notification behavior, and cloud propagation must be checked against a real assignment before a release is declared validated.
 - Current-user identity must be verified for both lists owned by the caller and lists shared to the caller. A native participant string that cannot be mapped to a known participant causes a safe error; shared-to-me support is not yet established end to end.
 - No automated test in this PR logs into iCloud, reads a user's reminders, sends invitations, or mutates a real shared list. Tests cover parsing/resolution, failure propagation, availability/JSON/UI contracts, permission-free commands, native calling conventions, and synthetic native storage only.
 - Private APIs may change on newer macOS releases. This is not an App Store-compatible/public-API guarantee.
 
 ## Live acceptance checklist before release
 
-Create a disposable shared list manually in Reminders.app. Record the macOS version and `rem doctor` output without publishing private participant addresses. Verify participant enumeration and `me` on both owner and invitee accounts. Assign an existing test task to self, another participant, a different participant, and then nobody. After each operation check local app display, a fresh CLI process, the other participant's device, and unchanged title, notes, due date, alarms, tags, priority, and completion state. Repeat the same assignment to confirm idempotence. Verify read-only/unshared lists and unknown/ambiguous names fail without changes. Create/rename a disposable section and confirm other sections and reminder placement remain unchanged. Record assignment status semantics from an app-created assignment before enabling writes by default.
+Create a disposable shared list manually in Reminders.app. Record the macOS version and `rem doctor` output without publishing private participant addresses. Verify participant enumeration and `me` on both owner and invitee accounts. Assign an existing test task to self, another participant, a different participant, and then nobody. After each operation check local app display, a fresh CLI process, the other participant's device, and unchanged title, notes, due date, alarms, tags, priority, and completion state. Repeat the same assignment to confirm idempotence. Verify read-only/unshared lists and unknown/ambiguous names fail without changes. Create/rename a disposable section and confirm other sections and reminder placement remain unchanged. Record assignment status semantics from an app-created assignment before declaring a release validated; this does not gate development writes on `main`.
 
 Run the automated checks on macOS:
 

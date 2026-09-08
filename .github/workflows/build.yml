@@ -89,7 +89,7 @@ jobs:
               printf 'Workflow: %s/%s/actions/runs/%s\n' \
                 "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
               printf 'Development build; not Developer ID signed or notarized.\n'
-              printf 'Experimental assignment writes still require --experimental.\n\n'
+              printf 'Experimental main snapshot; see docs/collaboration.md for validation limits.\n\n'
               go version -m "$stage/rem"
             } > "$stage/BUILD-INFO.txt"
             COPYFILE_DISABLE=1 tar -czf "dist/rem-darwin-$arch.tar.gz" \

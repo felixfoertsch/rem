@@ -50,11 +50,11 @@ jobs:
           bin/rem sections --help
           bin/rem section create --help
           bin/rem section rename --help
-          if bin/rem assign nonexistent someone@example.com 2>bin/opt-in-error; then
-            echo 'assignment without --experimental unexpectedly succeeded' >&2
+          if bin/rem assign nonexistent someone@example.com --none 2>bin/assign-args-error; then
+            echo 'assignment with conflicting arguments unexpectedly succeeded' >&2
             exit 1
           fi
-          grep -q -- '--experimental' bin/opt-in-error
+          grep -q -- 'provide a participant or --none, not both' bin/assign-args-error
       - name: Reproducible source bundle with dependencies
         if: always()
         run: |
