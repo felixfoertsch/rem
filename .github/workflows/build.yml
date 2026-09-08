@@ -1,0 +1,124 @@
+name: Build binaries
+run-name: Build binaries (${{ github.event_name }}) at ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Build artifacts only: no permission to create tags or GitHub Releases.
+permissions:
+  contents: read
+
+# Deliberately no concurrency group: even cancel-in-progress:false may replace
+# pending runs. Every main push must keep its own build and artifacts.
+jobs:
+  commits:
+    name: Select commits and test build planner
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      commits: ${{ steps.select.outputs.commits }}
+      count: ${{ steps.select.outputs.count }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Test single/multi-commit pushes, merges, and force pushes
+        run: python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
+      - name: Select every newly reachable main commit
+        id: select
+        run: python3 scripts/ci/main_commits.py
+
+  build:
+    name: macOS binaries / ${{ matrix.commit }}
+    needs: commits
+    if: needs.commits.outputs.count != '0'
+    runs-on: macos-15
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        commit: ${{ fromJSON(needs.commits.outputs.commits) }}
+    env:
+      REM_NO_UPDATE_CHECK: '1'
+      TARGET_COMMIT: ${{ matrix.commit }}
+    steps:
+      - name: Check out the exact commit being built
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ matrix.commit }}
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      # Keep packaging here, rather than invoking a new repository script:
+      # earlier commits in the same push do not yet contain that script.
+      - name: Build and verify Apple Silicon and Intel archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse HEAD)
+          test "$sha" = "$TARGET_COMMIT"
+          version="main-${sha:0:12}"
+          built=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          mkdir -p dist
+          for arch in arm64 amd64; do
+            stage="$RUNNER_TEMP/rem-$sha-$arch"
+            mkdir -p "$stage"
+            CGO_ENABLED=1 GOOS=darwin GOARCH="$arch" CC=clang \
+              go build -trimpath -buildvcs=false \
+                -ldflags "-s -w -X main.version=$version -X main.commit=$sha -X main.buildTime=$built" \
+                -o "$stage/rem" ./cmd/rem
+            chmod 755 "$stage/rem"
+            native_arch=arm64
+            if [ "$arch" = amd64 ]; then native_arch=x86_64; fi
+            lipo -verify_arch "$native_arch" "$stage/rem"
+            if [ "$arch" = "$(go env GOHOSTARCH)" ]; then
+              "$stage/rem" version | grep -F "$sha"
+            fi
+            cp LICENSE "$stage/LICENSE"
+            {
+              printf 'Repository: %s\nCommit: %s\nVersion: %s\nBuilt: %s\nArchitecture: darwin/%s\n' \
+                "$GITHUB_REPOSITORY" "$sha" "$version" "$built" "$arch"
+              printf 'Workflow: %s/%s/actions/runs/%s\n' \
+                "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+              printf 'Development build; not Developer ID signed or notarized.\n'
+              printf 'Experimental assignment writes still require --experimental.\n\n'
+              go version -m "$stage/rem"
+            } > "$stage/BUILD-INFO.txt"
+            COPYFILE_DISABLE=1 tar -czf "dist/rem-darwin-$arch.tar.gz" \
+              -C "$stage" rem LICENSE BUILD-INFO.txt
+            verify=$(mktemp -d "$RUNNER_TEMP/rem-unpack.XXXXXX")
+            tar -xzf "dist/rem-darwin-$arch.tar.gz" -C "$verify"
+            test -x "$verify/rem"
+            cmp "$stage/rem" "$verify/rem"
+          done
+          (cd dist && shasum -a 256 rem-darwin-*.tar.gz > SHA256SUMS)
+          (cd dist && shasum -a 256 -c SHA256SUMS)
+      - name: Upload per-commit binaries (main only)
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        id: artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: rem-macos-${{ matrix.commit }}
+          path: dist/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 90
+      - name: Link downloads in the run summary
+        if: steps.artifact.outputs.artifact-url != ''
+        env:
+          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
+        run: |
+          {
+            printf '### Commit `%s`\n\n' "$TARGET_COMMIT"
+            printf '[Download macOS binaries](%s)\n\n' "$ARTIFACT_URL"
+            printf 'Contains Apple Silicon (`arm64`) and Intel (`amd64`) tarballs, plus SHA256SUMS. Retained for 90 days.\n'
+            printf 'Development snapshot only; releases and tags are manual.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
