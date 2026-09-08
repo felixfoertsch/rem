@@ -12,18 +12,20 @@ import (
 	eventkit "github.com/BRO3886/go-eventkit"
 	"github.com/BRO3886/go-eventkit/reminders"
 	"github.com/BRO3886/rem/internal/reminder"
+	"github.com/BRO3886/rem/internal/reminderkit"
 )
 
 // ReminderService provides operations for reminders using go-eventkit for
-// all reads and writes, including flagged operations via the private
-// ReminderKit bridge.
+// core reads and writes. Supplemental assignment metadata uses the narrow
+// internal ReminderKit bridge until those APIs are exposed by go-eventkit.
 type ReminderService struct {
-	client *reminders.Client
+	client        *reminders.Client
+	collaboration collaborationReader
 }
 
 // NewReminderService creates a new ReminderService.
 func NewReminderService(client *reminders.Client) *ReminderService {
-	return &ReminderService{client: client}
+	return &ReminderService{client: client, collaboration: reminderkit.New()}
 }
 
 // CreateReminder creates a new reminder and returns its ID.
@@ -86,7 +88,9 @@ func (s *ReminderService) GetReminder(id string) (*reminder.Reminder, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reminder not found: %s", id)
 	}
-	return fromEventKitReminder(r), nil
+	result := fromEventKitReminder(r)
+	s.enrichCollaboration([]*reminder.Reminder{result})
+	return result, nil
 }
 
 // ListReminders returns reminders matching the given filter.
@@ -134,6 +138,7 @@ func (s *ReminderService) ListReminders(filter *reminder.ListFilter) ([]*reminde
 		result = append(result, r)
 	}
 
+	s.enrichCollaboration(result)
 	sortReminders(result)
 
 	return result, nil

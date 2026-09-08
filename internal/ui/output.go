@@ -125,7 +125,18 @@ func printRemindersTable(w io.Writer, reminders []*reminder.Reminder) {
 	}
 
 	table := newTable(w)
-	table.Header("ID", "Name", "List", "Due", "Priority", "Status")
+	hasAssignments := false
+	for _, r := range reminders {
+		if r.Collaboration != nil && r.Collaboration.AssignedTo != nil {
+			hasAssignments = true
+			break
+		}
+	}
+	headers := []string{"ID", "Name", "List", "Due", "Priority", "Status"}
+	if hasAssignments {
+		headers = append(headers, "Assigned to")
+	}
+	table.Header(headers)
 
 	for _, r := range reminders {
 		id := shortID(r.ID)
@@ -136,7 +147,11 @@ func printRemindersTable(w io.Writer, reminders []*reminder.Reminder) {
 		priority := r.Priority.String()
 		status := statusString(r)
 
-		table.Append([]string{id, r.Name, r.ListName, dueStr, priority, status})
+		row := []string{id, r.Name, r.ListName, dueStr, priority, status}
+		if hasAssignments {
+			row = append(row, assignmentLabel(r))
+		}
+		table.Append(row)
 	}
 
 	table.Render()
@@ -152,7 +167,11 @@ func printRemindersPlain(w io.Writer, reminders []*reminder.Reminder) {
 		if r.Completed {
 			statusMark = "[x]"
 		}
-		fmt.Fprintf(w, "%s %s %s%s [%s]\n", statusMark, shortID(r.ID), r.Name, dueStr, r.ListName)
+		assignment := ""
+		if r.Collaboration != nil && r.Collaboration.AssignedTo != nil {
+			assignment = " [assigned: " + assignmentLabel(r) + "]"
+		}
+		fmt.Fprintf(w, "%s %s %s%s [%s]%s\n", statusMark, shortID(r.ID), r.Name, dueStr, r.ListName, assignment)
 	}
 }
 
@@ -170,6 +189,7 @@ func printReminderRichDetail(w io.Writer, r *reminder.Reminder) {
 	fmt.Fprintf(w, "%s %s\n", bold("Name:"), r.Name)
 	fmt.Fprintf(w, "%s %s\n", bold("ID:"), r.ID)
 	fmt.Fprintf(w, "%s %s\n", bold("List:"), cyan(r.ListName))
+	fmt.Fprintf(w, "%s %s\n", bold("Assigned to:"), assignmentLabel(r))
 
 	if r.Body != "" {
 		fmt.Fprintf(w, "%s %s\n", bold("Notes:"), r.Body)
@@ -236,6 +256,7 @@ func printReminderPlainDetail(w io.Writer, r *reminder.Reminder) {
 	fmt.Fprintf(w, "Name: %s\n", r.Name)
 	fmt.Fprintf(w, "ID: %s\n", r.ID)
 	fmt.Fprintf(w, "List: %s\n", r.ListName)
+	fmt.Fprintf(w, "Assigned to: %s\n", assignmentLabel(r))
 	if r.Body != "" {
 		fmt.Fprintf(w, "Notes: %s\n", r.Body)
 	}

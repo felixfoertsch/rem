@@ -27,22 +27,15 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Private API capability probe (no user data)
+      - name: Native boundary tests (synthetic data only)
         run: |
           mkdir -p bin
-          xcrun clang -fobjc-arc -framework Foundation scripts/reminderkit-probe.m -o bin/reminderkit-probe
-          bin/reminderkit-probe
-      - name: Reproducible source bundle with dependencies
-        run: |
-          go mod vendor
-          tar -czf "$RUNNER_TEMP/rem-source.tar.gz" go.mod go.sum Makefile LICENSE cmd internal skills vendor scripts
-      - uses: actions/upload-artifact@v4
-        with:
-          name: rem-source
-          path: ${{ runner.temp }}/rem-source.tar.gz
-          retention-days: 1
-      - name: Unit tests (no permission prompts)
+          xcrun clang -fobjc-arc -fblocks -fsanitize=address,undefined -framework Foundation -framework EventKit scripts/reminderkit-tests.m -o bin/reminderkit-tests
+          bin/reminderkit-tests
+      - name: Unit tests with race detector (no permission prompts)
         run: go test -race ./...
+      - name: Static analysis
+        run: go vet ./...
       - name: Build
         run: go build -o bin/rem ./cmd/rem
       - name: Permission-free CLI smoke tests
@@ -51,3 +44,25 @@ jobs:
           bin/rem version
           bin/rem skills status
           bin/rem completion bash > /dev/null
+          bin/rem doctor
+          bin/rem assign --help
+          bin/rem participants --help
+          bin/rem sections --help
+          bin/rem section create --help
+          bin/rem section rename --help
+          if bin/rem assign nonexistent someone@example.com 2>bin/opt-in-error; then
+            echo 'assignment without --experimental unexpectedly succeeded' >&2
+            exit 1
+          fi
+          grep -q -- '--experimental' bin/opt-in-error
+      - name: Reproducible source bundle with dependencies
+        if: always()
+        run: |
+          go mod vendor
+          tar --exclude=.git --exclude=bin -czf "$RUNNER_TEMP/rem-source.tar.gz" .
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rem-source
+          path: ${{ runner.temp }}/rem-source.tar.gz
+          retention-days: 1

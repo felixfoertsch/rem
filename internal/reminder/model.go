@@ -178,6 +178,7 @@ func (r RecurrenceRule) String() string {
 
 // Reminder represents a single reminder item.
 type Reminder struct {
+	Collaboration    *Collaboration // optional native metadata; not imported across lists
 	ID               string
 	Name             string
 	Body             string
