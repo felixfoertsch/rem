@@ -1,6 +1,6 @@
 //go:build darwin && cgo
 
-// A narrow, dynamically guarded extension to go-eventkit. No database writes,
+// A narrow, dynamically guarded extension to go-eventkit. No direct database writes,
 // permission bypass, AppleScript, external helper process, or private headers.
 #import <Foundation/Foundation.h>
 #import <EventKit/EventKit.h>
@@ -92,6 +92,8 @@ static id backingObject(id ekObject, NSString *expectedClass) {
     for (Class cls = object_getClass(backing); cls; cls = class_getSuperclass(cls)) {
         Ivar ivar = class_getInstanceVariable(cls,"_remObject");
         if (!ivar) continue;
+        const char *type = ivar_getTypeEncoding(ivar);
+        if (!type || type[0] != '@') fail(@"Native backing-object layout changed");
         id object = object_getIvar(backing,ivar);
         if ([object isKindOfClass:NSClassFromString(expectedClass)]) return object;
         break;
@@ -282,9 +284,12 @@ static id handle(NSDictionary *request) {
     NSArray<EKReminder *> *all = fetchReminders(store,nil);
     if ([op isEqualToString:@"metadata"]) {
         NSMutableDictionary *out = [NSMutableDictionary dictionary];
+        NSMutableDictionary *byID = [NSMutableDictionary dictionary];
+        for (EKReminder *r in all) byID[r.calendarItemIdentifier.lowercaseString] = r;
         for (NSString *identifier in request[@"ids"]) {
             @try {
-                EKReminder *ek = findReminder(all,identifier);
+                EKReminder *ek = byID[normalizeID(identifier).lowercaseString];
+                if (!ek) fail(@"Reminder no longer exists");
                 out[identifier] = metadata(backingObject(ek,@"REMReminder"),backingObject(ek.calendar,@"REMList"));
             } @catch (NSException *e) {
                 out[identifier] = @{@"assigned_to":NSNull.null,@"assignment_available":@NO,
@@ -297,8 +302,12 @@ static id handle(NSDictionary *request) {
     id reminder = backingObject(ek,@"REMReminder");
     id list = backingObject(ek.calendar,@"REMList");
     NSArray *roster = participants(list);
-    if ([op isEqualToString:@"roster"]) return @{@"people":publicRoster(roster),@"list_id":ek.calendar.calendarIdentifier};
+    if ([op isEqualToString:@"roster"]) {
+        if (![get(list,@"isShared") boolValue]) fail(@"Assignments require a shared list");
+        return @{@"people":publicRoster(roster),@"list_id":ek.calendar.calendarIdentifier,@"reminder_id":ek.calendarItemIdentifier};
+    }
     if (![op isEqualToString:@"assign"]) fail(@"Unsupported operation");
+    if (!equalText(ek.calendarItemIdentifier, text(request[@"id"]))) fail(@"Resolved reminder no longer exists; nothing changed");
     if (![get(list,@"isShared") boolValue]) fail(@"Assignments require a shared list");
     if (![ek.calendar.calendarIdentifier isEqualToString:request[@"list_id"]]) fail(@"Reminder moved to another list; re-run after reviewing its participants");
     requireWritable(ek.calendar,list);
@@ -314,14 +323,18 @@ static id handle(NSDictionary *request) {
     if ((clear && !oldID.length) || (!clear && equalText(oldID,targetID))) return metadata(reminder,list);
     // Do not fabricate an originator or substitute the assignee for the caller.
     if (!clear && !me) fail(@"Cannot resolve the current user's native participant ID on this account; nothing changed");
+    if (!clear && (![target[@"_object_id"] isKindOfClass:NSClassFromString(@"REMObjectID")] ||
+        ![me[@"_object_id"] isKindOfClass:NSClassFromString(@"REMObjectID")]))
+        fail(@"Native participant identity type changed; nothing saved");
     id nativeStore = get(reminder,@"store");
     id saveRequest = newObject(@"REMSaveRequest",@"initWithStore:",@[nativeStore]);
     id change = invoke(saveRequest,@"updateReminder:",@[reminder]);
     id context = get(change,@"assignmentContext");
     invoke(context,@"removeAllAssignments",@[]);
     if (!clear) {
-        // Status 0 is the initial-state value. The native storage accepts it,
-        // but app notification/sync semantics still require a live account test.
+        // Status 0 is provisional: synthetic native storage accepts it, but
+        // that does not establish app notification/sync semantics. CLI writes
+        // require --experimental until a real shared-account test verifies it.
         invoke(context,@"addAssignmentWithAssigneeID:originatorID:status:",@[target[@"_object_id"],me[@"_object_id"],@0]);
         if (!equalText(objectIDString(get(get(context,@"currentAssignment"),@"assigneeID")),targetID))
             fail(@"Native assignment state was not accepted; nothing saved");

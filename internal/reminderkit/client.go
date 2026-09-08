@@ -4,7 +4,6 @@
 package reminderkit
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -42,7 +41,7 @@ func ResolveParticipant(people []reminder.Participant, query string) (*reminder.
 	for _, p := range people {
 		match := strings.EqualFold(query, "me") && p.IsMe
 		if !strings.EqualFold(query, "me") {
-			match = strings.EqualFold(p.Name, query) || strings.EqualFold(trimMailto(p.Address), trimMailto(query))
+			match = strings.EqualFold(p.Name, query) || (trimMailto(p.Address) != "" && strings.EqualFold(trimMailto(p.Address), trimMailto(query)))
 		}
 		if !match {
 			continue
@@ -80,8 +79,9 @@ func (c *Client) Assign(id, query string, clear bool) (*reminder.Collaboration, 
 		return nil, fmt.Errorf("provide a participant or --none, not both")
 	}
 	var roster struct {
-		People []reminder.Participant `json:"people"`
-		ListID string                 `json:"list_id"`
+		People     []reminder.Participant `json:"people"`
+		ListID     string                 `json:"list_id"`
+		ReminderID string                 `json:"reminder_id"`
 	}
 	if err := c.call(map[string]any{"op": "roster", "id": id}, &roster); err != nil {
 		return nil, err
@@ -95,10 +95,10 @@ func (c *Client) Assign(id, query string, clear bool) (*reminder.Collaboration, 
 		participantID = p.ID
 	}
 	var out reminder.Collaboration
-	if roster.ListID == "" {
-		return nil, fmt.Errorf("native roster has no list ID; refusing to write")
+	if roster.ListID == "" || roster.ReminderID == "" {
+		return nil, fmt.Errorf("native roster has no resolved reminder/list ID; refusing to write")
 	}
-	err := c.call(map[string]any{"op": "assign", "id": id, "list_id": roster.ListID, "participant_id": participantID, "clear": clear}, &out)
+	err := c.call(map[string]any{"op": "assign", "id": roster.ReminderID, "list_id": roster.ListID, "participant_id": participantID, "clear": clear}, &out)
 	if err != nil {
 		return nil, err
 	}
@@ -135,13 +135,26 @@ func (c *Client) ChangeSection(op, list, name, newName string) error {
 	if op == "section-rename" && strings.TrimSpace(newName) == "" {
 		return fmt.Errorf("new section name is required")
 	}
-	var out json.RawMessage
-	return c.call(map[string]any{"op": op, "list": list, "name": name, "new_name": newName}, &out)
+	var out reminder.Section
+	if err := c.call(map[string]any{"op": op, "list": list, "name": name, "new_name": newName}, &out); err != nil {
+		return err
+	}
+	want := newName
+	if op == "section-create" {
+		want = name
+	}
+	if out.ID == "" || out.Name != want {
+		return fmt.Errorf("section result could not be verified; inspect Reminders before retrying")
+	}
+	return nil
 }
 
 // Diagnostics does not instantiate an EventKit/REMStore or request permission.
 func (c *Client) Diagnostics() (map[string]any, error) {
 	out := make(map[string]any)
 	err := c.call(map[string]any{"op": "diagnostics"}, &out)
+	if err == nil && out == nil {
+		err = fmt.Errorf("native diagnostics returned no result")
+	}
 	return out, err
 }

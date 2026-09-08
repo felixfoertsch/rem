@@ -59,9 +59,9 @@ func TestAssignValidatesAndVerifies(t *testing.T) {
 				if r["op"] != "roster" {
 					t.Fatalf("first operation = %v", r)
 				}
-				return fill(out, map[string]any{"list_id": "L", "people": []reminder.Participant{{ID: "P", Name: "Pat"}}})
+				return fill(out, map[string]any{"list_id": "L", "reminder_id": "RESOLVED", "people": []reminder.Participant{{ID: "P", Name: "Pat"}}})
 			}
-			if r["op"] != "assign" || r["list_id"] != "L" || r["clear"] != clear {
+			if r["id"] != "RESOLVED" || r["op"] != "assign" || r["list_id"] != "L" || r["clear"] != clear {
 				t.Fatalf("unexpected write %v", r)
 			}
 			result := reminder.Collaboration{AssignmentAvailable: true}
@@ -87,7 +87,7 @@ func TestAssignValidatesAndVerifies(t *testing.T) {
 }
 
 func TestAssignFailureDoesNotReportSuccess(t *testing.T) {
-	for _, mode := range []string{"roster-error", "no-list-id", "unknown-person", "save-error", "unavailable", "wrong-assignee", "uncleared"} {
+	for _, mode := range []string{"roster-error", "no-list-id", "no-reminder-id", "unknown-person", "save-error", "unavailable", "wrong-assignee", "uncleared"} {
 		t.Run(mode, func(t *testing.T) {
 			writes := 0
 			client := &Client{call: func(request, out any) error {
@@ -104,7 +104,11 @@ func TestAssignFailureDoesNotReportSuccess(t *testing.T) {
 					if mode == "unknown-person" {
 						people = nil
 					}
-					return fill(out, map[string]any{"list_id": list, "people": people})
+					resolved := "RESOLVED"
+					if mode == "no-reminder-id" {
+						resolved = ""
+					}
+					return fill(out, map[string]any{"list_id": list, "reminder_id": resolved, "people": people})
 				}
 				writes++
 				if mode == "save-error" {
@@ -123,7 +127,7 @@ func TestAssignFailureDoesNotReportSuccess(t *testing.T) {
 			if _, err := client.Assign("R", q, clear); err == nil {
 				t.Fatal("failure reported success")
 			}
-			if (mode == "roster-error" || mode == "unknown-person" || mode == "no-list-id") && writes != 0 {
+			if (mode == "roster-error" || mode == "unknown-person" || mode == "no-list-id" || mode == "no-reminder-id") && writes != 0 {
 				t.Fatal("unsafe write after failed resolution")
 			}
 		})
@@ -145,5 +149,32 @@ func TestInvalidRequestsNeverCrossBridge(t *testing.T) {
 	}
 	if err := client.ChangeSection("section-delete", "L", "S", ""); err == nil || !strings.Contains(err.Error(), "invalid") {
 		t.Fatalf("delete unexpectedly supported: %v", err)
+	}
+}
+
+func TestEmptyMailtoCannotMatchMissingAddress(t *testing.T) {
+	if _, err := ResolveParticipant([]reminder.Participant{{ID: "P", Name: "Pat"}}, "mailto:"); err == nil {
+		t.Fatal("empty mailto matched a missing email")
+	}
+}
+
+func TestSectionResultMustBeVerified(t *testing.T) {
+	for _, op := range []string{"section-create", "section-rename"} {
+		for _, valid := range []bool{false, true} {
+			c := &Client{call: func(request, out any) error {
+				r := request.(map[string]any)
+				name := r["name"].(string)
+				if op == "section-rename" {
+					name = r["new_name"].(string)
+				}
+				if valid {
+					return fill(out, reminder.Section{ID: "S", Name: name})
+				}
+				return fill(out, nil)
+			}}
+			if err := c.ChangeSection(op, "L", "Section", "New name"); (err == nil) != valid {
+				t.Fatalf("%s valid=%t: %v", op, valid, err)
+			}
+		}
 	}
 }

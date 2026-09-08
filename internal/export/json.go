@@ -36,6 +36,7 @@ type JSONRecurrenceRule struct {
 
 // JSONReminder is the JSON-serializable representation of a reminder.
 type JSONReminder struct {
+	reminder.Collaboration
 	ID               string               `json:"id"`
 	Name             string               `json:"name"`
 	Body             string               `json:"body,omitempty"`
@@ -101,6 +102,10 @@ func ToJSON(r *reminder.Reminder) JSONReminder {
 		Tags:             r.Tags,
 		Recurring:        r.Recurring,
 		Alarms:           []JSONAlarm{},
+	}
+
+	if r.Collaboration != nil {
+		jr.Collaboration = *r.Collaboration
 	}
 
 	for _, rule := range r.RecurrenceRules {

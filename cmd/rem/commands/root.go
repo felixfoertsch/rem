@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/BRO3886/go-eventkit/reminders"
 	"github.com/BRO3886/rem/internal/service"
@@ -51,6 +52,10 @@ import/export capabilities, and a clean terminal UI.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		outputFormat = strings.ToLower(strings.TrimSpace(outputFormat))
+		if outputFormat == "text" {
+			outputFormat = "plain"
+		}
 		switch outputFormat {
 		case "table", "json", "plain":
 		default:
