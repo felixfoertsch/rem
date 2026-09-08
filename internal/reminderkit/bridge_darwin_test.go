@@ -16,9 +16,16 @@ func TestNativeDiagnosticsWithoutAccess(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			result, err := client.Diagnostics()
-			if err != nil { t.Error(err); return }
-			if result["permission_requested"] != false { t.Errorf("unexpected permission request: %v", result) }
-			if _, ok := result["reminders_authorization_status"]; !ok { t.Error("missing authorization status") }
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if result["permission_requested"] != false {
+				t.Errorf("unexpected permission request: %v", result)
+			}
+			if _, ok := result["reminders_authorization_status"]; !ok {
+				t.Error("missing authorization status")
+			}
 		}()
 	}
 	wg.Wait()
@@ -26,5 +33,7 @@ func TestNativeDiagnosticsWithoutAccess(t *testing.T) {
 
 func TestNativeMarshalErrorIsReturned(t *testing.T) {
 	var result any
-	if err := nativeCall(make(chan int), &result); err == nil { t.Fatal("unsupported request should fail before native code") }
+	if err := nativeCall(make(chan int), &result); err == nil {
+		t.Fatal("unsupported request should fail before native code")
+	}
 }
