@@ -12,7 +12,7 @@
 ## Architecture
 
 - `cmd/rem/commands/`: Cobra commands; shared interactive helpers in `huh_helpers.go` and batch mutations in `batch.go`.
-- `internal/service/`: core reminder/list operations via `go-eventkit`; AppleScript is limited to the default-list name query.
+- `internal/service/`: core reminder/list operations via `go-eventkit`; no AppleScript runtime.
 - `go-eventkit/reminderkit/`: native collaboration types, guarded Objective-C/cgo transactions, participants, sections, diagnostics, and save/readback verification.
 - `internal/reminderkit/`: CLI participant selectors and assignment orchestration only; no native code or serialized bridge protocol.
 - `internal/reminder/`: domain models and collaboration metadata; `internal/export/`: JSON/CSV; `internal/ui/`: terminal formatting.
@@ -65,7 +65,7 @@ python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
 - Run focused tests for changed behavior, then relevant neighboring tests. Native bridge changes also require the race/sanitizer checks documented in `docs/collaboration.md` and `.github/workflows/test.yml`.
 - Use `olekukonko/tablewriter` v1 APIs (`NewTable`, `Header`, `Append`, `Render`), not the old `SetHeader` API.
 - Keep embedded skills, help, README, and command references consistent. Test skill embedding after documentation changes. `rem skills install --dry-run` previews without overwriting managed user skills.
-- `make completions` rebuilds shell completions; inspect generated changes before including them. Do not claim live account behavior from permission-free or synthetic tests.
+- `make completions` generates ignored shell completions locally; do not commit generated copies. Do not claim live account behavior from permission-free or synthetic tests.
 
 ## Artifacts and releases
 

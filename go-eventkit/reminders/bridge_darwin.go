@@ -11,9 +11,11 @@ package reminders
 import "C"
 import (
 	"context"
+
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/felixfoertsch/rem/go-eventkit/internal/watch"
 	"os"
 	"strings"
 	"sync"
@@ -413,7 +415,7 @@ func (c *Client) WatchChanges(ctx context.Context) (<-chan struct{}, error) {
 			remWatchMu.Unlock()
 			close(ch)
 		}()
-		inner := watchChangesFromFile(ctx, f)
+		inner := watch.FromFile(ctx, f)
 		for range inner {
 			select {
 			case ch <- struct{}{}:

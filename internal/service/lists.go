@@ -11,15 +11,13 @@ import (
 
 // ListService provides operations for reminder lists.
 // Uses go-eventkit for all operations (reads and writes).
-// AppleScript is only used for querying the default list name.
 type ListService struct {
 	client *reminders.Client
-	exec   *Executor
 }
 
 // NewListService creates a new ListService.
-func NewListService(client *reminders.Client, exec *Executor) *ListService {
-	return &ListService{client: client, exec: exec}
+func NewListService(client *reminders.Client) *ListService {
+	return &ListService{client: client}
 }
 
 // GetLists returns all reminder lists via go-eventkit.
@@ -35,22 +33,6 @@ func (s *ListService) GetLists() ([]*reminder.List, error) {
 	}
 
 	return lists, nil
-}
-
-// GetList returns a single list by name.
-func (s *ListService) GetList(name string) (*reminder.List, error) {
-	lists, err := s.GetLists()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, l := range lists {
-		if l.Name == name {
-			return l, nil
-		}
-	}
-
-	return nil, fmt.Errorf("list not found: %s", name)
 }
 
 // findListByName looks up a list by name and returns the go-eventkit List.
@@ -146,16 +128,6 @@ func (s *ListService) DeleteList(name string) error {
 	}
 
 	return nil
-}
-
-// GetDefaultListName returns the name of the default reminder list via AppleScript.
-// EventKit does not expose which list is the "default" list, so AppleScript is used.
-func (s *ListService) GetDefaultListName() (string, error) {
-	output, err := s.exec.Run(`tell application "Reminders" to get name of default list`)
-	if err != nil {
-		return "", fmt.Errorf("failed to get default list: %w", err)
-	}
-	return output, nil
 }
 
 // fromEventKitList converts a go-eventkit List to an internal List.

@@ -5,11 +5,11 @@ import (
 	"os"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/felixfoertsch/rem/go-eventkit/reminders"
 	"github.com/felixfoertsch/rem/internal/service"
 	"github.com/felixfoertsch/rem/internal/skills"
 	"github.com/felixfoertsch/rem/internal/update"
-	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
@@ -17,7 +17,6 @@ var (
 	outputFormat string
 	noColor      bool
 
-	exec        *service.Executor
 	reminderSvc *service.ReminderService
 	listSvc     *service.ListService
 )
@@ -33,9 +32,8 @@ var initializeServices = func() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize Reminders access: %w\n\nRun rem from Terminal.app and allow Reminders access when prompted. Check System Settings > Privacy & Security > Reminders for the application launching rem. A grant to one terminal does not necessarily apply to an IDE or agent application. If the host cannot request access, rem cannot grant it on the host's behalf. See docs/troubleshooting.md", err)
 	}
-	exec = service.NewExecutor()
 	reminderSvc = service.NewReminderService(client)
-	listSvc = service.NewListService(client, exec)
+	listSvc = service.NewListService(client)
 	return nil
 }
 

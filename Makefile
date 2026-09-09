@@ -19,10 +19,6 @@ test: ## Run tests in both modules
 	go test ./... -v
 	cd go-eventkit && go test ./... -v
 
-test-short: ## Run tests without integration tests
-	go test ./... -short -v
-	cd go-eventkit && go test ./... -short -v
-
 lint: ## Run linter
 	go vet ./...
 	cd go-eventkit && go vet ./...

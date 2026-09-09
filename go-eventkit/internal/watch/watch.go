@@ -1,4 +1,4 @@
-package reminders
+package watch
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// watchChangesFromFile reads bytes from f and sends a signal on the returned
+// FromFile reads bytes from f and sends a signal on the returned
 // channel for each byte read. The channel is buffered (capacity 16); excess
 // signals are dropped via a non-blocking send (callers re-fetch anyway).
 // The channel is closed when ctx is cancelled or f returns an error/EOF.
@@ -16,7 +16,7 @@ import (
 // The file descriptor is set to non-blocking mode so that reads can be
 // interleaved with ctx.Done() checks. This avoids goroutine leaks when
 // the context is cancelled but no data arrives on the pipe.
-func watchChangesFromFile(ctx context.Context, f *os.File) <-chan struct{} {
+func FromFile(ctx context.Context, f *os.File) <-chan struct{} {
 	ch := make(chan struct{}, 16)
 	// Set non-blocking so Read returns EAGAIN instead of blocking forever.
 	syscall.SetNonblock(int(f.Fd()), true)

@@ -15,17 +15,6 @@ import (
 
 // --- Mock bridge: simulates the ObjC bridge returning JSON ---
 
-// mockBridge simulates ObjC bridge responses for testing.
-type mockBridge struct {
-	calendarsJSON string
-	eventsJSON    string
-	eventJSON     string
-	createJSON    string
-	updateJSON    string
-	deleteOK      bool
-	err           error
-}
-
 // simulateCalendarsResponse simulates what the ObjC bridge returns for Calendars().
 func simulateCalendarsResponse(calendars []Calendar) string {
 	raw := make([]rawCalendar, len(calendars))

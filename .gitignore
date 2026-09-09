@@ -1,4 +1,5 @@
 bin/
+/completions/
 *.exe
 *.test
 *.out

@@ -321,7 +321,7 @@ rem/
 │   ├── main.go
 │   └── commands/         # Cobra command definitions
 ├── internal/
-│   ├── service/          # Service layer wrapping go-eventkit (AppleScript only for default list name)
+│   ├── service/          # Service layer wrapping go-eventkit
 │   ├── reminder/         # Domain models (Reminder, List, Priority)
 │   ├── export/           # JSON & CSV import/export
 │   ├── skills/           # Agent skill install/uninstall/status
@@ -336,7 +336,7 @@ rem/
 
 **Core reads and writes** — including reminder CRUD and list CRUD — go through `go-eventkit` (`github.com/felixfoertsch/rem/go-eventkit`) — an Objective-C EventKit bridge compiled into the binary via cgo. Direct in-process access to the Reminders store, no IPC. Assignments, participants, sections, and diagnostics use the bundled library's `go-eventkit/reminderkit` package. Runtime latency depends on the host and account.
 
-**Flagged, tag, and list-sharing operations** use the private ReminderKit bridge in go-eventkit — EventKit doesn't expose these properties, but `REMReminder.flagged`, `REMReminder.hashtags`, and `REMList.isShared` do. Tags degrade gracefully if the private API becomes unavailable. AppleScript is only used for the default list name query.
+**Flagged, tag, and list-sharing operations** use the private ReminderKit bridge in go-eventkit — EventKit doesn't expose these properties, but `REMReminder.flagged`, `REMReminder.hashtags`, and `REMList.isShared` do. Tags degrade gracefully if the private API becomes unavailable. Default-list selection uses EventKit; no AppleScript runtime is needed.
 
 **Shared lists** work like any other list for creates, reads, updates, flags, tags, and deletes. Moving a reminder across a shared-list boundary is the one exception: macOS refuses a true move there (even Apple's own apps copy and delete behind the scenes), so rem does the same — the reminder is copied to the target with all fields intact, the original is deleted, and a warning with the new ID is printed to stderr.
 

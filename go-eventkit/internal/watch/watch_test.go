@@ -1,4 +1,4 @@
-package calendar
+package watch
 
 import (
 	"bytes"
@@ -18,7 +18,7 @@ func TestWatchChanges_SignalOnWrite(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ch := watchChangesFromFile(ctx, r)
+	ch := FromFile(ctx, r)
 
 	if _, err := w.Write([]byte{1}); err != nil {
 		t.Fatal(err)
@@ -41,7 +41,7 @@ func TestWatchChanges_CtxCancel(t *testing.T) {
 	defer w.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	ch := watchChangesFromFile(ctx, r)
+	ch := FromFile(ctx, r)
 	cancel()
 
 	// Write a byte to unblock the Read call so the goroutine can observe ctx.Done().
@@ -72,7 +72,7 @@ func TestWatchChanges_PipeClose(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ch := watchChangesFromFile(context.Background(), r)
+	ch := FromFile(context.Background(), r)
 	w.Close()
 
 	select {
@@ -95,7 +95,7 @@ func TestWatchChanges_Coalescing(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ch := watchChangesFromFile(ctx, r)
+	ch := FromFile(ctx, r)
 	if _, err := w.Write(bytes.Repeat([]byte{1}, 100)); err != nil {
 		t.Fatal(err)
 	}
